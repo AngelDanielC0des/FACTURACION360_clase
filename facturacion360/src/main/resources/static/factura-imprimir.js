@@ -19,7 +19,7 @@ const estiloHoja    = document.getElementById("estiloFormatoPapel");
 // Los avisos de esta pantalla. Aquí la franja es el propio rótulo de estado del visor: el
 // "Cargando factura..." que ya viene escrito en el HTML es un estado, no un evento, así que
 // se queda hasta que la factura carga (limpiar) o hasta que falla (fijar).
-const { fijar, limpiar } = crearAvisos({
+const { anunciar, fijar, limpiar } = crearAvisos({
     franja: estadoVisor,
     region: document.getElementById("anuncios"),
 });
@@ -640,14 +640,37 @@ async function ejecutarBusqueda() {
     try {
         const respuesta = await fetch("/factura/buscar?" + parametros);
         if (!respuesta.ok) {
-            contadorResultados.textContent = "Error al buscar facturas.";
+            avisarEnElPanel(await motivoDe(respuesta, "No se pudieron buscar las facturas."));
             return;
         }
         const facturas = await respuesta.json();
         mostrarResultadosBusqueda(facturas);
-    } catch {
-        contadorResultados.textContent = "No se pudo conectar con el servidor.";
+
+    } catch (error) {
+        // Se registra la excepción en vez de tragársela: por aquí pasan tanto
+        // los cortes de red como cualquier fallo al pintar los resultados, y
+        // sin rastro en la consola los segundos se confunden con los primeros.
+        console.error("Error al buscar facturas", error);
+        avisarEnElPanel("No se pudo conectar con el servidor.");
     }
+}
+
+/**
+ * Cuenta un problema dentro del panel de búsqueda.
+ *
+ * No se usa la franja de avisos de la pantalla porque el panel la tapa: ocupa
+ * toda la ventana, así que un mensaje detrás no lo ve nadie. Se escribe en el
+ * mismo sitio donde va el recuento, pero marcado como error —antes salía en
+ * gris pequeño, igual que un «3 factura(s) encontrada(s)», y un error que
+ * parece un recuento no se lee— y se repite en la región viva para quien
+ * navega con lector de pantalla.
+ *
+ * @param {string} mensaje el problema, ya en español
+ */
+function avisarEnElPanel(mensaje) {
+    contadorResultados.textContent = mensaje;
+    contadorResultados.classList.add("contador-error");
+    anunciar(mensaje);
 }
 
 campoBusqueda.addEventListener("input", buscarFacturasConRetardo);
@@ -670,6 +693,9 @@ function mostrarResultadosBusqueda(facturas) {
 
     contadorResultados.textContent = facturas.length + " factura(s) encontrada(s)"
         + (yaEnCola > 0 ? ` (${yaEnCola} ya en cola)` : "");
+    // Si la búsqueda anterior había fallado, el recuento vuelve a ser un
+    // recuento: sin esto se quedaría en rojo para siempre.
+    contadorResultados.classList.remove("contador-error");
     actualizarBotonAgregar();
 }
 
@@ -1152,6 +1178,20 @@ const opcionDescargar = document.getElementById("compartirDescargar");
 let facturaCompartible = null;
 
 /**
+ * El PDF de la factura visible, pedido por adelantado.
+ *
+ * navigator.share() exige un gesto de usuario VIGENTE, y el viaje al servidor
+ * para generar el PDF se lo come: cuando la respuesta llega, el clic ya ha
+ * caducado y el navegador responde «Must be handling a user gesture». Por eso
+ * el PDF se pide al ABRIR el menú y no al elegir el canal: para cuando el
+ * usuario pulsa WhatsApp el fichero ya está, y share() se llama con el gesto
+ * todavía vivo.
+ *
+ * @type {Promise<File>|null}
+ */
+let pdfPedido = null;
+
+/**
  * Deja el menú de compartir listo para la factura recién cargada.
  *
  * @param {object} detalle el mismo DetalleFactura que acaba de pintarse
@@ -1159,6 +1199,11 @@ let facturaCompartible = null;
 function prepararCompartir(detalle) {
     facturaCompartible = detalle;
     botonCompartir.disabled = false;
+
+    // El PDF que hubiera pedido es de la factura anterior: desde la cola se
+    // salta de una a otra sin recargar la página, y compartir el documento de
+    // otra factura es peor que tardar un segundo en pedir el correcto.
+    pdfPedido = null;
 
     const esBorrador = detalle.factura.estado === "BORRADOR";
     avisoBorrador.classList.toggle("d-none", !esBorrador);
@@ -1249,14 +1294,31 @@ function enlaceDelCanal(canal, texto) {
         + "&body=" + encodeURIComponent(texto);
 }
 
+/**
+ * Un fallo del que ya sabemos qué contarle al usuario, en español.
+ *
+ * Sirve para distinguirlo de las excepciones del navegador, cuyo mensaje viene
+ * en inglés y no se le puede enseñar a nadie.
+ */
+class FalloConocido extends Error {}
+
 /** Pide al servidor el PDF de la factura visible, en el formato elegido. */
 async function pedirPdf() {
     const id = facturaCompartible.factura.idFactura;
     const formato = selectFormato.value || "A4";
 
-    const respuesta = await fetch("/factura/" + id + "/pdf?formato=" + encodeURIComponent(formato));
+    let respuesta;
+    try {
+        respuesta = await fetch("/factura/" + id + "/pdf?formato=" + encodeURIComponent(formato));
+    } catch (error) {
+        // fetch solo rechaza cuando ni siquiera hay conexión; un 500 llega como
+        // respuesta normal y se trata justo debajo.
+        console.error("No se pudo pedir el PDF de la factura", error);
+        throw new FalloConocido("No se pudo conectar con el servidor.");
+    }
+
     if (!respuesta.ok) {
-        throw new Error(await motivoDe(respuesta, "No se pudo generar el PDF."));
+        throw new FalloConocido(await motivoDe(respuesta, "No se pudo generar el PDF."));
     }
 
     const nombre = facturaCompartible.factura.numeroFactura.replace(/[^\w.-]/g, "_") + ".pdf";
@@ -1298,41 +1360,86 @@ async function compartir(canal) {
     botonCompartir.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparando…';
 
     try {
-        const fichero = await pedirPdf();
+        // Normalmente ya está pedido desde que se abrió el menú; el ?? es para
+        // cuando alguien llama sin pasar por él.
+        const fichero = await (pdfPedido ?? pedirPdf());
         const texto = mensajeDeLaFactura();
 
-        if (canal === "descargar") {
-            descargar(fichero);
-            return;
-        }
-
-        if (navigator.canShare && navigator.canShare({ files: [fichero] })) {
-            await navigator.share({
-                files: [fichero],
-                title: "Factura " + facturaCompartible.factura.numeroFactura,
-                text: texto,
-            });
+        if (canal !== "descargar" && await seHaCompartidoElFichero(fichero, texto)) {
             return;
         }
 
         descargar(fichero);
+
+        if (canal === "descargar") {
+            fijar("PDF descargado.");
+            return;
+        }
+
         window.open(enlaceDelCanal(canal, texto), "_blank", "noopener");
         fijar("PDF descargado. Adjúntalo al mensaje que se acaba de abrir.");
 
     } catch (error) {
-        // Que el usuario cierre el selector del sistema no es un fallo.
-        if (error && error.name === "AbortError") {
-            return;
-        }
+        // Nunca se enseña el mensaje de una excepción del navegador: vienen en
+        // inglés. Solo los nuestros, que ya están escritos para leerse.
+        const mensaje = error instanceof FalloConocido
+            ? error.message
+            : "No se pudo compartir la factura. Prueba a descargar el PDF.";
 
         console.error("Error al compartir la factura", error);
-        fijar(error.message || "No se pudo compartir la factura.", { esError: true });
+        fijar(mensaje, { esError: true });
 
     } finally {
         botonCompartir.innerHTML = textoOriginal;
         botonCompartir.disabled = false;
     }
 }
+
+/**
+ * Intenta entregar el PDF al selector del sistema.
+ *
+ * @return {Promise<boolean>} true si el fichero ya está en manos del sistema o
+ *         el usuario decidió cancelar; false si hay que seguir por el camino de
+ *         escritorio (descargar y abrir el canal)
+ */
+async function seHaCompartidoElFichero(fichero, texto) {
+    if (!navigator.canShare || !navigator.canShare({ files: [fichero] })) {
+        return false;
+    }
+
+    try {
+        await navigator.share({
+            files: [fichero],
+            title: "Factura " + facturaCompartible.factura.numeroFactura,
+            text: texto,
+        });
+        return true;
+
+    } catch (error) {
+        // El usuario ha cerrado el selector. No es un fallo y no hay que
+        // ofrecerle nada más: ya ha dicho que no.
+        if (error && error.name === "AbortError") {
+            return true;
+        }
+
+        // Cualquier otra cosa —el gesto caducado, un permiso denegado— NO es el
+        // final: queda el camino de escritorio, que funciona igual. Se registra
+        // para poder diagnosticarlo, pero el usuario no se entera de nada.
+        console.warn("El selector del sistema no se pudo abrir; se descarga el PDF", error);
+        return false;
+    }
+}
+
+botonCompartir.addEventListener("click", () => {
+    if (!facturaCompartible) {
+        return;
+    }
+    // El fallo no se trata aquí: lo recoge compartir(), que es quien sabe
+    // contárselo al usuario. El catch vacío solo evita que la promesa quede
+    // rechazada sin escuchar si al final no se comparte nada.
+    pdfPedido = pedirPdf();
+    pdfPedido.catch(() => {});
+});
 
 opcionWhatsapp.addEventListener("click", () => compartir("whatsapp"));
 opcionTelegram.addEventListener("click", () => compartir("telegram"));

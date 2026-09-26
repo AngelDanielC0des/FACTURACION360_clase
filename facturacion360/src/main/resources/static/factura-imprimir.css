@@ -538,6 +538,31 @@ body {
     gap: 0.5rem;
 }
 
+/*
+ * El recuento de resultados del buscador.
+ *
+ * El gris lo daba la utilidad .text-muted de Bootstrap, que viene con
+ * !important y por tanto no se podía teñir de rojo cuando el recuento pasa a
+ * contar un problema. Se sustituye por esta clase, sin !important ninguno.
+ */
+.contador-resultados {
+    color: var(--texto-apagado);
+}
+
+/*
+ * Cuando lo que cuenta es un problema.
+ *
+ * El panel tapa la franja de avisos de la pantalla, así que los errores del
+ * buscador tienen que verse aquí dentro. Antes salían con el mismo gris
+ * pequeño, indistinguibles de un «3 factura(s) encontrada(s)». El color no es
+ * lo único que cambia (criterio 1.4.1): también el grosor, que se sigue
+ * distinguiendo en escala de grises.
+ */
+.contador-resultados.contador-error {
+    color: #b02a37;
+    font-weight: 600;
+}
+
 /* Cada resultado es una tarjeta con checkbox integrado. */
 .tarjeta-resultado {
     display: flex;
