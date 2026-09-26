@@ -25,28 +25,22 @@
     <!--/* Solo en borradores: deja claro que el documento no es una factura válida. */-->
     <div class="marca-agua" th:if="${esBorrador}">BORRADOR</div>
 
-    <!-- ── Cabecera ──────────────────────────────────────────────── -->
+    <!-- ── Cabecera ─────────────────────────────────────── -->
+    <!--/*
+        Las tres piezas (emisor, identificación y QR) salen de fragmentos: lo
+        único que cambia entre formatos es cómo se colocan, no lo que dicen.
+    */-->
     <div class="cabecera">
         <table class="cabecera-tabla">
 
             <!--/*
-                A4 y Carta: una sola fila con emisor, número y QR. Hay 182 mm
-                de ancho y los tres bloques caben de sobra.
+                A4 y Carta: una sola fila con emisor, número y QR. Hay 182 mm de
+                ancho y los tres bloques caben de sobra.
             */-->
             <tr th:unless="${estrecha}">
-                <td class="c-emisor">
-                    <img th:if="${logo}" th:src="${logo}" alt="" />
-                    <h1 th:text="${fmt.oRaya(emisor?.nombre())}">Facturación 360</h1>
-                    <p class="sub">Documento de factura</p>
-                </td>
-                <td class="c-datos">
-                    <h2 th:text="${factura.numeroFactura()}">F-0000-0000</h2>
-                    <p class="dato">Fecha: <span th:text="${fmt.fecha(factura.fechaEmision())}">—</span></p>
-                    <p class="dato">Estado: <span th:text="${factura.estado()}">—</span></p>
-                </td>
-                <td class="c-qr">
-                    <div th:replace="~{factura-pdf-qr :: bloqueQr}"></div>
-                </td>
+                <td class="c-emisor" th:insert="~{factura-pdf-cabecera :: emisor}"></td>
+                <td class="c-datos"  th:insert="~{factura-pdf-cabecera :: identificacion}"></td>
+                <td class="c-qr"     th:insert="~{factura-pdf-qr :: bloqueQr}"></td>
             </tr>
 
             <!--/*
@@ -56,20 +50,12 @@
                 comparten la segunda fila.
             */-->
             <tr th:if="${estrecha}">
-                <td class="c-emisor" colspan="2">
-                    <img th:if="${logo}" th:src="${logo}" alt="" />
-                    <h1 th:text="${fmt.oRaya(emisor?.nombre())}">Facturación 360</h1>
-                </td>
+                <td class="c-emisor" colspan="2"
+                    th:insert="~{factura-pdf-cabecera :: emisor}"></td>
             </tr>
             <tr th:if="${estrecha}">
-                <td class="c-datos">
-                    <h2 th:text="${factura.numeroFactura()}">F-0000-0000</h2>
-                    <p class="dato">Fecha: <span th:text="${fmt.fecha(factura.fechaEmision())}">—</span></p>
-                    <p class="dato">Estado: <span th:text="${factura.estado()}">—</span></p>
-                </td>
-                <td class="c-qr">
-                    <div th:replace="~{factura-pdf-qr :: bloqueQr}"></div>
-                </td>
+                <td class="c-datos" th:insert="~{factura-pdf-cabecera :: identificacion}"></td>
+                <td class="c-qr"    th:insert="~{factura-pdf-qr :: bloqueQr}"></td>
             </tr>
         </table>
     </div>

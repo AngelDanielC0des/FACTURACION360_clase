@@ -542,6 +542,12 @@ function actualizarFormatoPapel() {
 selectFormato.addEventListener("change", actualizarFormatoPapel);
 actualizarFormatoPapel();
 
+// El PDF que hubiera pedido el menú de compartir es del formato anterior. Hoy
+// no se puede dar —el menú se cierra en cuanto se toca el selector— pero la
+// invariante «el PDF pedido es el de lo que se está viendo» se mantiene aquí y
+// no se confía a que el popover siga comportándose igual.
+selectFormato.addEventListener("change", () => { pdfPedido = null; });
+
 // Cualquier cambio de tamaño (texto largo, logo que no carga, cambio de
 // formato) vuelve a partir el contenido en hojas.
 new ResizeObserver(programarPaginar).observe(document.body);
@@ -1278,7 +1284,10 @@ function enlaceDelCanal(canal, texto) {
 
     if (canal === "telegram") {
         // Telegram no admite destinatario en el enlace: el chat se elige siempre.
-        return "https://t.me/share/url?url=" + encodeURIComponent(texto);
+        // El mensaje va en «text» y no en «url», que es para una dirección: aquí
+        // no hay ninguna que compartir —la factura no es pública— y metiendo el
+        // texto en «url» Telegram lo presentaba como si fuera un enlace.
+        return "https://t.me/share/url?url=&text=" + encodeURIComponent(texto);
     }
 
     // Del destinatario se codifican SOLO '?', '&' y '#', que son los tres
@@ -1332,8 +1341,12 @@ function descargar(fichero) {
     enlace.href = url;
     enlace.download = fichero.name;
     enlace.click();
-    // Sin esto, el Blob se queda en memoria hasta que se recargue la página.
-    URL.revokeObjectURL(url);
+
+    // Se revoca en el siguiente turno y no aquí mismo: hay navegadores que aún
+    // no han empezado a leer el Blob cuando click() devuelve, y revocarlo en el
+    // acto les aborta la descarga. Sin revocarlo, el Blob se quedaría en memoria
+    // hasta recargar la página.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /**

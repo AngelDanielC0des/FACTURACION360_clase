@@ -2,6 +2,8 @@ package edu.xtd.facturacion360.controller;
 
 import java.io.IOException;
 
+import com.google.zxing.WriterException;
+
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -58,12 +60,14 @@ public class FacturaPdfController {
 	 * @param idFactura identificador de la factura
 	 * @param formato   {@code A4} (por defecto), {@code A5} o {@code letter}
 	 * @return 200 con el PDF, o 400/404 con un {@code ProblemDetail}
-	 * @throws IOException si falla el render del documento
+	 * @throws WriterException si no se puede construir el código QR obligatorio
+	 * @throws IOException     si falla el render del documento
 	 */
 	@GetMapping(value = "/{idFactura}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
 	public ResponseEntity<byte[]> obtenerPdf(
 			@PathVariable int idFactura,
-			@RequestParam(required = false) String formato) throws IOException {
+			@RequestParam(required = false) String formato)
+			throws WriterException, IOException {
 
 		FormatoPapel papel;
 		try {
