@@ -167,16 +167,30 @@ function mostrarQr(esBorrador, idFactura) {
     bloqueQr.classList.remove("d-none");
 }
 
-/** Carga los datos de la informacion del emisor */
-async function cargarEmisor() {
+/**
+ * Los datos del emisor, que son los mismos para todas las facturas.
+ *
+ * Se guarda la PROMESA y no el resultado para que la impresión en lote pueda
+ * esperarla en vez de pintar los clones con lo que hubiera cargado. Antes esto
+ * era un `window.__datosEmisor` que nadie asignaba nunca, así que todas las
+ * facturas impresas en lote salían con el emisor a "—".
+ *
+ * @type {Promise<object|null>}
+ */
+let emisorCargado = Promise.resolve(null);
+
+/** Pide los datos del emisor, los pinta en el visor y los devuelve. */
+async function pedirEmisor() {
     try {
         const respuesta = await fetch("/emisor");
-        if (respuesta.ok) {
-            const emisor = await respuesta.json();
-            mostrarEmisor(emisor);
-        }
+        if (!respuesta.ok) return null;
+
+        const emisor = await respuesta.json();
+        mostrarEmisor(emisor);
+        return emisor;
     } catch (error) {
         console.error("Error al cargar los datos del emisor", error);
+        return null;
     }
 }
 /** Muestra los datos de la informacion del emisor */
@@ -226,6 +240,30 @@ function formatearImporte(importe) {
 function formatearPorcentaje(porcentaje) {
     const valor = porcentaje == null ? 0 : porcentaje;
     return Number(valor).toLocaleString("es-ES") + " %";
+}
+
+const ESCAPES_HTML = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+};
+
+/**
+ * Escapa un dato del servidor antes de interpolarlo en una plantilla HTML.
+ *
+ * El visor pinta con textContent y no necesita nada de esto, pero la plantilla
+ * de la impresión en lote se construye como cadena de texto: sin escapar, un
+ * cliente llamado `<img src=x onerror=...>` ejecutaría su código en cuanto se
+ * añadiera a la cola. Los importes y las fechas pasan igual por aquí: cuesta lo
+ * mismo y así no hay que acordarse de qué campo es de fiar.
+ *
+ * @param {*} valor lo que se va a interpolar
+ * @return {string} el mismo texto, sin caracteres que abran una etiqueta
+ */
+function escaparHtml(valor) {
+    return String(valor ?? "").replace(/[&<>"']/g, caracter => ESCAPES_HTML[caracter]);
 }
 
 function mostrarError(mensaje) {
@@ -508,7 +546,8 @@ actualizarFormatoPapel();
 new ResizeObserver(programarPaginar).observe(document.body);
 
 cargarDetalleFactura();
-cargarEmisor();
+// Se guarda la promesa: la impresión en lote la espera antes de pintar los clones.
+emisorCargado = pedirEmisor();
 
 
 // ── Selección múltiple ──────────────────────────────────────────────
@@ -529,11 +568,16 @@ const botonLimpiarCola     = document.getElementById("botonLimpiarCola");
 const botonImprimirTodas   = document.getElementById("botonImprimirTodas");
 
 /**
- * IDs de las facturas marcadas con el checkbox en el panel de búsqueda.
- * Se usa un Set para garantizar unicidad sin búsquedas lineales.
- * @type {Set<number>}
+ * Facturas marcadas con el checkbox en el panel de búsqueda, por id.
+ *
+ * Es un Map y no un Set porque al pasarlas a la cola hace falta la factura
+ * entera, no solo su id. Con un Set había que recorrer otra vez el DOM leyendo
+ * los checkboxes y sacar la factura de un WeakMap auxiliar: dos fuentes de
+ * verdad para el mismo dato, y la de verdad era el DOM.
+ *
+ * @type {Map<number, object>}
  */
-const marcadas = new Set();
+const marcadas = new Map();
 
 /**
  * Cola de impresión: facturas completas (cabecera) listas para imprimir.
@@ -542,9 +586,6 @@ const marcadas = new Set();
  * @type {Map<number, object>}
  */
 const colaImpresion = new Map();
-
-/** Vincula cada nodo tarjeta con su objeto Factura sin contaminar el DOM. */
-const facturasDeTarjeta = new WeakMap();
 
 /** Abre el panel de búsqueda con transición CSS. */
 function abrirPanelBuscador() {
@@ -618,23 +659,16 @@ filtroEstado.addEventListener("change", buscarFacturasConRetardo);
  * @param {Array<object>} facturas — lista de facturas del backend
  */
 function mostrarResultadosBusqueda(facturas) {
-    listaResultados.replaceChildren();
-    
-    // Contar cuántas se van a mostrar (las que no están en cola)
-    let mostradas = 0;
+    // Las que ya están en la cola no se ofrecen: no tiene sentido seleccionar
+    // algo que ya va a imprimirse.
+    const seleccionables = facturas.filter(factura => !colaImpresion.has(factura.idFactura));
+    const yaEnCola = facturas.length - seleccionables.length;
 
-    for (const factura of facturas) {
-        // Las que ya están en la cola no se muestran: no tiene sentido
-        // seleccionar algo que ya va a imprimirse.
-        if (colaImpresion.has(factura.idFactura)) continue;
+    listaResultados.replaceChildren(
+            ...seleccionables.map(factura => crearTarjetaResultado(factura)));
 
-        const tarjeta = crearTarjetaResultado(factura);
-        listaResultados.appendChild(tarjeta);
-        mostradas++;
-    }
-
-    contadorResultados.textContent = facturas.length + " factura(s) encontrada(s)" 
-        + (facturas.length > mostradas ? ` (${facturas.length - mostradas} ya en cola)` : "");
+    contadorResultados.textContent = facturas.length + " factura(s) encontrada(s)"
+        + (yaEnCola > 0 ? ` (${yaEnCola} ya en cola)` : "");
     actualizarBotonAgregar();
 }
 
@@ -653,40 +687,65 @@ function crearTarjetaResultado(factura) {
     checkbox.className = "form-check-input flex-shrink-0";
     checkbox.checked = marcadas.has(factura.idFactura);
 
-    checkbox.addEventListener("change", function () {
-        if (this.checked) {
-            marcadas.add(factura.idFactura);
-            tarjeta.classList.add("seleccionada");
+    /** El estado de la marca vive en el Map; la clase solo lo refleja. */
+    function sincronizarMarca() {
+        if (checkbox.checked) {
+            marcadas.set(factura.idFactura, factura);
         } else {
             marcadas.delete(factura.idFactura);
-            tarjeta.classList.remove("seleccionada");
         }
+        tarjeta.classList.toggle("seleccionada", checkbox.checked);
+    }
+
+    checkbox.addEventListener("change", () => {
+        sincronizarMarca();
         actualizarBotonAgregar();
     });
 
-    const info = document.createElement("div");
-    info.className = "tarjeta-resultado-info";
-    info.innerHTML =
-        `<div class="tarjeta-resultado-numero">${factura.numeroFactura}</div>` +
-        `<div class="tarjeta-resultado-cliente">${factura.nombreCliente || "—"}</div>`;
+    const info = crearBloque("tarjeta-resultado-info", [
+        ["tarjeta-resultado-numero", factura.numeroFactura],
+        ["tarjeta-resultado-cliente", factura.nombreCliente || "—"],
+    ]);
 
+    // El estado admite nulo en la base de datos. Sin el resguardo, una factura
+    // sin estado rompía el .map() entero y el panel contaba un error de
+    // conexión que no había ocurrido.
+    const estado = factura.estado || "SIN ESTADO";
     const badge = document.createElement("span");
-    badge.className = "badge-estado badge-estado-" + factura.estado.toLowerCase();
-    badge.textContent = factura.estado;
+    badge.className = "badge-estado badge-estado-" + estado.toLowerCase();
+    badge.textContent = estado;
 
     const importe = document.createElement("span");
     importe.className = "tarjeta-resultado-importe";
     importe.textContent = formatearImporte(factura.total);
 
     tarjeta.append(checkbox, info, badge, importe);
-
-    if (marcadas.has(factura.idFactura)) {
-        tarjeta.classList.add("seleccionada");
-    }
-
-    facturasDeTarjeta.set(tarjeta, factura);
+    tarjeta.classList.toggle("seleccionada", checkbox.checked);
 
     return tarjeta;
+}
+
+/**
+ * Arma el bloque de dos líneas que comparten las tarjetas del panel y de la
+ * cola. Se pinta con textContent y no con innerHTML: el número de factura y el
+ * nombre del cliente vienen del servidor, y por ahí entraba HTML ajeno.
+ *
+ * @param {string} clase clase del contenedor
+ * @param {Array<[string, string]>} lineas pares clase/texto, en orden
+ * @return {HTMLElement}
+ */
+function crearBloque(clase, lineas) {
+    const contenedor = document.createElement("div");
+    contenedor.className = clase;
+
+    for (const [claseLinea, texto] of lineas) {
+        const linea = document.createElement("div");
+        linea.className = claseLinea;
+        linea.textContent = texto;
+        contenedor.append(linea);
+    }
+
+    return contenedor;
 }
 
 /** Habilita o deshabilita el botón "Añadir" según haya marcadas. */
@@ -699,12 +758,8 @@ function actualizarBotonAgregar() {
  * y muestra la sidebar.
  */
 function agregarMarcadasACola() {
-    for (const tarjeta of listaResultados.querySelectorAll(".tarjeta-resultado")) {
-        const checkbox = tarjeta.querySelector("input[type=checkbox]");
-        if (!checkbox.checked) continue;
-
-        const factura = facturasDeTarjeta.get(tarjeta);
-        colaImpresion.set(factura.idFactura, factura);
+    for (const [id, factura] of marcadas) {
+        colaImpresion.set(id, factura);
     }
 
     marcadas.clear();
@@ -729,22 +784,20 @@ function ocultarSidebar() {
 
 /** Redibuja el contenido de la sidebar según el estado de la cola. */
 function actualizarSidebar() {
-    listaCola.replaceChildren();
     contadorCola.textContent = String(colaImpresion.size);
     botonImprimirTodas.disabled = colaImpresion.size === 0;
 
     if (colaImpresion.size === 0) {
+        listaCola.replaceChildren();
         ocultarSidebar();
         return;
     }
 
-    // Leemos el idFactura de la URL actual para resaltarlo
-    const idActual = Number(new URLSearchParams(window.location.search).get("idFactura"));
+    listaCola.replaceChildren(
+            ...Array.from(colaImpresion.values(), factura => crearTarjetaCola(factura)));
 
-    for (const [id, factura] of colaImpresion) {
-        listaCola.appendChild(crearTarjetaCola(factura));
-    }
-    
+    // La factura que el visor está enseñando se resalta en la cola.
+    const idActual = Number(new URLSearchParams(window.location.search).get("idFactura"));
     if (idActual) {
         resaltarTarjetaActiva(idActual);
     }
@@ -761,33 +814,43 @@ function crearTarjetaCola(factura) {
     tarjeta.className = "tarjeta-cola";
     tarjeta.dataset.id = factura.idFactura;
 
-    const info = document.createElement("div");
-    info.className = "tarjeta-cola-info";
-    info.innerHTML =
-        `<div class="tarjeta-cola-numero">${factura.numeroFactura}</div>` +
-        `<div class="tarjeta-cola-importe">${formatearImporte(factura.total)}</div>`;
+    /*
+     * La previsualización se dispara desde un <button> y no desde el <div> con
+     * un onclick que había antes: así se llega a ella con el tabulador y
+     * responde a Intro y a la barra espaciadora, cosa que un div no hace por
+     * mucho cursor de mano que se le ponga. El CSS le quita el aspecto de
+     * botón, no su semántica.
+     */
+    const previsualizar = document.createElement("button");
+    previsualizar.type = "button";
+    previsualizar.className = "tarjeta-cola-previsualizar";
+    previsualizar.title = "Previsualizar esta factura";
+    previsualizar.append(crearBloque("tarjeta-cola-info", [
+        ["tarjeta-cola-numero", factura.numeroFactura],
+        ["tarjeta-cola-importe", formatearImporte(factura.total)],
+    ]));
 
-    const botonQuitar = document.createElement("button");
-    botonQuitar.type = "button";
-    botonQuitar.className = "btn btn-sm btn-outline-danger flex-shrink-0";
-    botonQuitar.innerHTML = '<i class="bi bi-x-lg"></i>';
-    botonQuitar.title = "Quitar de la cola";
-
-    // Clic en la tarjeta → previsualizar esa factura en el visor principal.
-    info.addEventListener("click", function () {
+    previsualizar.addEventListener("click", () => {
         window.history.replaceState(null, "", "?idFactura=" + factura.idFactura);
         cargarDetalleFactura(factura.idFactura);
         resaltarTarjetaActiva(factura.idFactura);
     });
 
-    // Clic en el botón × → quitar de la cola.
-    botonQuitar.addEventListener("click", function (evento) {
-        evento.stopPropagation();
+    const quitar = document.createElement("button");
+    quitar.type = "button";
+    quitar.className = "btn btn-sm btn-outline-danger flex-shrink-0";
+    quitar.innerHTML = '<i class="bi bi-x-lg"></i>';
+    quitar.title = "Quitar de la cola";
+
+    // Sin stopPropagation: los dos botones son hermanos, así que el clic en el
+    // aspa nunca pasó por el de previsualizar. Era una defensa contra un
+    // burbujeo que no existe.
+    quitar.addEventListener("click", () => {
         colaImpresion.delete(factura.idFactura);
         actualizarSidebar();
     });
 
-    tarjeta.append(info, botonQuitar);
+    tarjeta.append(previsualizar, quitar);
     return tarjeta;
 }
 
@@ -806,94 +869,101 @@ botonLimpiarCola.addEventListener("click", function () {
 
 
 /**
- * Construye el HTML completo de la factura.
+ * Construye el HTML de una factura para imprimirla en lote.
+ *
+ * Es la misma maquetación que el visor, pero como cadena de texto en vez de
+ * como DOM: los clones se crean de golpe y no pasan por mostrarDetalle(). Por
+ * eso todo lo que venga del servidor se interpola con escaparHtml().
+ *
+ * El emisor llega por parámetro y no se lee de una variable global: así la
+ * función depende solo de lo que se le pasa y quien la llama es responsable de
+ * haber esperado su carga.
+ *
+ * @param {object} detalle factura, cliente, conceptos y desglose
+ * @param {object} emisor  datos del emisor, o {} si no se pudieron cargar
+ * @return {string} el HTML del documento
  */
-function construirHtmlFactura(detalle) {
+function construirHtmlFactura(detalle, emisor) {
     const f = detalle.factura;
     const c = detalle.cliente;
-    const emisor = window.__datosEmisor || {}; // Guardado en cargarEmisor
     const conceptos = detalle.conceptos || [];
     const desglose = detalle.desglose || [];
 
     const esBorrador = f.estado === "BORRADOR";
     const marcaAgua = esBorrador ? `<p class="marca-agua" aria-hidden="true">BORRADOR</p>` : '';
 
+    // Mismo onerror que el visor (d-none, no style inline): un QR que no carga
+    // se esconde entero, con su rótulo y su leyenda.
     const qr = !esBorrador ? `
         <figure class="bloque-verifactu" aria-label="Código QR de verificación fiscal">
             <p class="rotulo-qr">QR tributario:</p>
-            <img class="qr-verifactu" src="/verifactu/qr/${f.idFactura}" alt="Código QR de validación" onerror="this.closest('.bloque-verifactu').style.display='none'">
+            <img class="qr-verifactu" src="/verifactu/qr/${encodeURIComponent(f.idFactura)}" alt="Código QR para verificar esta factura en la sede electrónica de la AEAT" onerror="this.closest('.bloque-verifactu').classList.add('d-none')">
             <figcaption class="leyenda-verifactu">
-                VERI*FACTU<br><small>Factura verificable en la sede electrónica de la AEAT</small>
+                VERI*FACTU<small>Factura verificable en la sede electrónica de la AEAT</small>
             </figcaption>
         </figure>
     ` : '';
 
-    let conceptosHtml = '';
-    if (conceptos.length === 0) {
-        conceptosHtml = `<tr><td colspan="7" class="text-center text-muted">Esta factura no tiene conceptos registrados.</td></tr>`;
-    } else {
-        conceptosHtml = conceptos.map(co => `
+    const conceptosHtml = conceptos.length === 0
+        ? `<tr><td colspan="7" class="text-center text-muted">Esta factura no tiene conceptos registrados.</td></tr>`
+        : conceptos.map(co => `
             <tr>
-                <td>${co.descripcion || "—"}</td>
-                <td class="text-end">${co.cantidad ?? "—"}</td>
-                <td class="text-end">${formatearImporte(co.precioUnitario)}</td>
-                <td class="text-end">${formatearPorcentaje(co.descuento)}</td>
-                <td class="text-end">${formatearImporte(co.baseImponible)}</td>
-                <td class="text-end">${formatearImporte(co.importeIva)}</td>
-                <td class="text-end">${formatearImporte(co.total)}</td>
+                <td>${escaparHtml(co.descripcion || "—")}</td>
+                <td class="text-end">${escaparHtml(co.cantidad ?? "—")}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(co.precioUnitario))}</td>
+                <td class="text-end">${escaparHtml(formatearPorcentaje(co.descuento))}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(co.baseImponible))}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(co.importeIva))}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(co.total))}</td>
             </tr>
         `).join('');
-    }
 
-    let desgloseHtml = '';
-    if (desglose.length > 0) {
-        desgloseHtml = desglose.map(d => `
+    const desgloseHtml = desglose.map(d => `
             <tr>
-                <td class="text-end">${formatearImporte(d.baseImponible)}</td>
-                <td class="text-end">${formatearPorcentaje(d.tipoImpositivo)}</td>
-                <td class="text-end">${formatearImporte(d.cuotaRepercutida)}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(d.baseImponible))}</td>
+                <td class="text-end">${escaparHtml(formatearPorcentaje(d.tipoImpositivo))}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(d.cuotaRepercutida))}</td>
             </tr>
         `).join('');
-    }
 
     return `
         ${marcaAgua}
-        <header class="cabecera-factura d-flex justify-content-between align-items-start gap-4">
+        <header class="cabecera-factura d-flex justify-content-between align-items-start">
             <div class="d-flex align-items-center gap-3">
-                <img src="/emisor/logo" alt="Logo emisor" class="logo-emisor" style="height: 100px; width: auto; max-height: 100px;" onerror="this.style.display='none'">
+                <img src="/emisor/logo" alt="Logo emisor" class="logo-emisor" onerror="this.style.display='none'">
                 <div>
                     <h1 class="h4 mb-0 text-primary">Facturación 360</h1>
                     <p class="mb-0 text-muted small">Documento de factura</p>
                 </div>
             </div>
-            <div class="d-flex align-items-start gap-4 ms-auto">
-                <div class="text-end">
-                    <h2 class="h5 mb-1">${f.numeroFactura}</h2>
-                    <p class="mb-0 small">Fecha: ${formatearFecha(f.fechaEmision)}</p>
-                    <p class="mb-0 small text-muted">Estado: ${f.estado}</p>
+            <div class="cabecera-identificacion d-flex align-items-start ms-auto">
+                <div class="datos-identificacion">
+                    <h2 class="h5 mb-1">${escaparHtml(f.numeroFactura)}</h2>
+                    <p class="mb-0 small">Fecha: ${escaparHtml(formatearFecha(f.fechaEmision))}</p>
+                    <p class="mb-0 small text-muted">Estado: ${escaparHtml(f.estado)}</p>
                 </div>
                 ${qr}
             </div>
         </header>
 
-        <div class="datos-partes mb-4">
+        <div class="datos-partes">
             <div class="row">
                 <div class="col-6 border-end">
                     <section>
                         <h2 class="h6 fw-bold border-bottom pb-2 mb-2">Emisor</h2>
-                        <p class="fw-bold mb-1">${emisor.nombre || "—"}</p>
-                        <p class="mb-1">NIF/CIF: ${emisor.cif || emisor.nifCif || "—"}</p>
-                        <p class="mb-1">${emisor.direccion || "—"}</p>
-                        <p class="mb-0">${[emisor.telefono, emisor.email].filter(Boolean).join(" · ") || "Sin contacto"}</p>
+                        <p class="fw-bold mb-1">${escaparHtml(emisor.nombre || "—")}</p>
+                        <p class="mb-1">NIF/CIF: ${escaparHtml(emisor.cif || emisor.nifCif || "—")}</p>
+                        <p class="mb-1">${escaparHtml(emisor.direccion || "—")}</p>
+                        <p class="mb-0">${escaparHtml([emisor.telefono, emisor.email].filter(Boolean).join(" · ") || "Sin contacto")}</p>
                     </section>
                 </div>
                 <div class="col-6">
                     <section class="ps-2">
                         <h2 class="h6 fw-bold border-bottom pb-2 mb-2">Cliente</h2>
-                        <p class="fw-bold mb-1">${c.nombre}</p>
-                        <p class="mb-1">NIF/CIF: ${c.nifCif}</p>
-                        <p class="mb-1">${formarDireccion(c)}</p>
-                        <p class="mb-0">${formarContacto(c)}</p>
+                        <p class="fw-bold mb-1">${escaparHtml(c.nombre)}</p>
+                        <p class="mb-1">NIF/CIF: ${escaparHtml(c.nifCif)}</p>
+                        <p class="mb-1">${escaparHtml(formarDireccion(c))}</p>
+                        <p class="mb-0">${escaparHtml(formarContacto(c))}</p>
                     </section>
                 </div>
             </div>
@@ -919,7 +989,7 @@ function construirHtmlFactura(detalle) {
             </div>
         </section>
 
-        <div class="d-flex justify-content-between align-items-start mt-4 mb-4 gap-4 flex-wrap flex-sm-nowrap fila-desglose-totales">
+        <div class="d-flex justify-content-between align-items-start flex-wrap fila-desglose-totales">
             <section class="desglose-factura flex-grow-1 ${desglose.length > 0 ? '' : 'd-none'}">
                 <h2 class="h6">Desglose del IVA</h2>
                 <table class="table table-sm tabla-desglose">
@@ -933,17 +1003,17 @@ function construirHtmlFactura(detalle) {
                     <tbody>${desgloseHtml}</tbody>
                 </table>
             </section>
-            <div class="totales-factura flex-shrink-0" style="width: 320px; max-width: 100%;">
-                <div><span>Subtotal</span><strong>${formatearImporte(f.subtotal)}</strong></div>
-                <div><span>IVA</span><strong>${formatearImporte(f.importeIva)}</strong></div>
-                <div class="total-final"><span>Total</span><strong>${formatearImporte(f.total)}</strong></div>
+            <div class="totales-factura flex-shrink-0">
+                <div><span>Subtotal</span><strong>${escaparHtml(formatearImporte(f.subtotal))}</strong></div>
+                <div><span>IVA</span><strong>${escaparHtml(formatearImporte(f.importeIva))}</strong></div>
+                <div class="total-final"><span>Total</span><strong>${escaparHtml(formatearImporte(f.total))}</strong></div>
             </div>
         </div>
 
         ${f.observaciones && f.observaciones.trim() ? `
         <section class="observaciones-factura">
             <h2 class="h5">Observaciones</h2>
-            <p class="mb-0">${f.observaciones}</p>
+            <p class="mb-0">${escaparHtml(f.observaciones)}</p>
         </section>` : ''}
     `;
 }
@@ -951,75 +1021,110 @@ function construirHtmlFactura(detalle) {
 /**
  * Crea un <div> con la misma estructura que el visor pero con los datos
  * de una factura concreta, listo para imprimir.
+ *
+ * @param {object} detalle factura, cliente, conceptos y desglose
+ * @param {object} emisor  datos del emisor
+ * @return {HTMLElement} la hoja clonada
  */
-function crearClonParaImpresion(detalle) {
+function crearClonParaImpresion(detalle, emisor) {
     const contenedor = document.createElement("div");
     contenedor.className = "documento-factura factura-lote";
-    
-    // Todas las hojas clonadas heredan la clase de hoja-estrecha si aplica
-    const hojaEstrecha = documentoFactura.classList.contains("hoja-estrecha");
-    if (hojaEstrecha) {
-        contenedor.classList.add("hoja-estrecha");
-    }
-
-    contenedor.innerHTML = construirHtmlFactura(detalle);
+    // El clon hereda el formato de hoja que haya elegido el selector.
+    contenedor.classList.toggle("hoja-estrecha",
+            documentoFactura.classList.contains("hoja-estrecha"));
+    contenedor.innerHTML = construirHtmlFactura(detalle, emisor);
     return contenedor;
 }
 
 /**
- * Imprime en lote todas las facturas de la cola.
+ * Pide el detalle de cada factura de la cola y devuelve los que hayan llegado.
+ *
+ * Las que fallen se descartan en silencio en vez de abortar el lote: con diez
+ * facturas seleccionadas, que una dé error no es razón para no imprimir las
+ * otras nueve.
+ *
+ * @return {Promise<Array<object>>}
  */
-async function imprimirEnLote() {
-    botonImprimirTodas.disabled = true;
-    const textoOriginal = botonImprimirTodas.innerHTML;
-    botonImprimirTodas.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparando…';
-
-    const ids = Array.from(colaImpresion.keys());
-    const peticiones = ids.map(id =>
-        fetch("/factura/" + id + "/detalle").then(r => r.ok ? r.json() : null)
-    );
+async function pedirDetallesDeLaCola() {
+    const peticiones = Array.from(colaImpresion.keys(), async id => {
+        const respuesta = await fetch("/factura/" + id + "/detalle");
+        return respuesta.ok ? respuesta.json() : null;
+    });
 
     const resultados = await Promise.allSettled(peticiones);
-    const detalles = resultados
-        .filter(r => r.status === "fulfilled" && r.value !== null)
-        .map(r => r.value);
+    return resultados
+        .filter(resultado => resultado.status === "fulfilled" && resultado.value !== null)
+        .map(resultado => resultado.value);
+}
 
-    if (detalles.length === 0) {
+/**
+ * Esconde el borrador, imprime los clones y devuelve la pantalla a su estado.
+ *
+ * El borrador se esconde ENTERO: la hoja principal y también las hojas que el
+ * paginador le haya creado. Antes solo se ocultaba la principal, así que un
+ * borrador de varias páginas colaba sus hojas extra delante de los clones.
+ *
+ * La sidebar recupera el estado que tenía y no uno fijo: antes se la mostraba
+ * siempre al terminar, incluso si estaba oculta al empezar.
+ *
+ * @param {Array<object>} detalles facturas a imprimir, en orden de cola
+ * @param {object} emisor datos del emisor
+ */
+async function imprimirClones(detalles, emisor) {
+    const hojasBorrador = [documentoFactura, ...hojasExtra()];
+    const sidebarEstabaOculta = sidebarCola.classList.contains("d-none");
+    const clones = detalles.map(detalle => crearClonParaImpresion(detalle, emisor));
+
+    hojasBorrador.forEach(hoja => hoja.classList.add("d-none"));
+    sidebarCola.classList.add("d-none");
+    document.body.append(...clones);
+
+    try {
+        // Un fotograma para que el navegador maquete los clones antes de medirlos.
+        await new Promise(requestAnimationFrame);
+        window.print();
+    } finally {
+        clones.forEach(clon => clon.remove());
+        hojasBorrador.forEach(hoja => hoja.classList.remove("d-none"));
+        sidebarCola.classList.toggle("d-none", sidebarEstabaOculta);
+        // El borrador vuelve a estar a la vista: se recalculan sus cortes.
+        programarPaginar();
+    }
+}
+
+/**
+ * Imprime de una vez todas las facturas de la cola.
+ *
+ * El try/finally es lo que garantiza que el botón se recupere: sin él, un error
+ * de red a mitad de la carga dejaba el botón deshabilitado y con el spinner
+ * puesto para siempre.
+ */
+async function imprimirEnLote() {
+    const textoOriginal = botonImprimirTodas.innerHTML;
+    botonImprimirTodas.disabled = true;
+    botonImprimirTodas.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparando…';
+
+    try {
+        // El emisor se espera: es el mismo para todas y sin él los clones
+        // saldrían con los datos de la empresa a "—".
+        const [detalles, emisor] = await Promise.all([
+            pedirDetallesDeLaCola(),
+            emisorCargado,
+        ]);
+
+        if (detalles.length === 0) {
+            fijar("No se pudieron cargar los datos para imprimir.", { esError: true });
+            return;
+        }
+
+        await imprimirClones(detalles, emisor ?? {});
+    } catch (error) {
+        console.error("Error al preparar la impresión en lote", error);
+        fijar("No se pudieron cargar los datos para imprimir.", { esError: true });
+    } finally {
         botonImprimirTodas.innerHTML = textoOriginal;
         botonImprimirTodas.disabled = false;
-        fijar("No se pudieron cargar los datos para imprimir.", { esError: true });
-        return;
     }
-
-    // Ocultar el visor original y la sidebar durante la impresión.
-    documentoFactura.classList.add("d-none");
-    sidebarCola.classList.add("d-none");
-
-    const clones = [];
-    for (const detalle of detalles) {
-        const clon = crearClonParaImpresion(detalle);
-        document.body.appendChild(clon);
-        clones.push(clon);
-    }
-
-    // Pequeña espera para que el navegador renderice los clones
-    await new Promise(resolve => requestAnimationFrame(resolve));
-
-    window.print();
-
-    // Restaurar: quitar clones, volver a mostrar el visor.
-    for (const clon of clones) {
-        clon.remove();
-    }
-    
-    // Como el documentoFactura vuelve a mostrarse, necesitamos repaginarlo
-    documentoFactura.classList.remove("d-none");
-    sidebarCola.classList.remove("d-none");
-    botonImprimirTodas.innerHTML = textoOriginal;
-    botonImprimirTodas.disabled = false;
-    
-    // Repaginar el documento principal
-    programarPaginar();
 }
 
 botonImprimirTodas.addEventListener("click", imprimirEnLote);
