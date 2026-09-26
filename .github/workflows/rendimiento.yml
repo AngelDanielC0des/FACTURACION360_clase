@@ -1,0 +1,81 @@
+# Mide el rendimiento de la preproducción ya desplegada.
+#
+# POR QUÉ ES UN WORKFLOW APARTE Y NO UN JOB DE pre_facturacion360.yml.
+# Aquel se dispara en cada push a feature/**, fix/** y chore/**. Colgar de él la
+# medición obligaría a ponerle un «if» para que no corriera en cada push, y ataría
+# medir a que hubiera un despliegue nuevo. Separado se lanza cuando hace falta,
+# mide lo que ya está desplegado y NO TOCA el pipeline de despliegue: cero riesgo
+# de romper lo que hoy funciona.
+#
+# Solo manual a propósito: la preproducción tiene cuota diaria de CPU si el App
+# Service es de plan gratuito, y no conviene gastarla en cada push.
+
+name: Rendimiento (preproducción)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Si esta URL cambia, hay que cambiarla también en tests/rendimiento/lighthouserc.json,
+  # que la lleva escrita porque Lighthouse CI no interpola variables de entorno.
+  BASE_URL: https://facturacion360-test-frdra3cwhcafdffp.spaincentral-01.azurewebsites.net
+
+# Dos mediciones distintas sobre el mismo entorno: no deben pisarse entre sí ni
+# con otra ejecución del mismo workflow.
+concurrency:
+  group: facturacion360-rendimiento
+  cancel-in-progress: false
+
+jobs:
+  # ── Tiempos de respuesta del servidor ────────────────────────────────
+  carga:
+    name: Carga (k6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Despertar la aplicación
+        run: ./.github/scripts/calentar.sh "$BASE_URL"
+
+      - uses: grafana/setup-k6-action@v1
+
+      - name: Ejecutar la prueba de humo
+        uses: grafana/run-k6-action@v1
+        with:
+          path: tests/rendimiento/smoke.js
+          flags: --summary-export=resumen-k6.json
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
+
+      # «always» para que el resumen se guarde también cuando k6 falla por
+      # umbral: es justo cuando hace falta mirarlo.
+      - name: Guardar el resumen
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-${{ github.run_id }}
+          path: resumen-k6.json
+          if-no-files-found: warn
+
+  # ── Métricas del frontend en el navegador ────────────────────────────
+  #
+  # Sin «needs»: es una medida independiente, y que la carga falle no debe
+  # impedir ver los Web Vitals.
+  web-vitals:
+    name: Web Vitals (Lighthouse)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Despertar la aplicación
+        run: ./.github/scripts/calentar.sh "$BASE_URL"
+
+      - name: Medir con Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: tests/rendimiento/lighthouserc.json
+          uploadArtifacts: true
+          temporaryPublicStorage: false
