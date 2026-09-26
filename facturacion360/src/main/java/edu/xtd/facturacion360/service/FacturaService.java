@@ -18,6 +18,8 @@ public interface FacturaService {
 	public Factura editarBorrador(int idFactura, FacturaRequest facturaRequest);
 
 	public List<Factura> buscar(String busqueda);
+	
+	public List<Factura> buscar(String busqueda, String estado);
 
 	public List<SugerenciaConcepto> buscarSugerenciasConceptos(String texto, int limite);
 

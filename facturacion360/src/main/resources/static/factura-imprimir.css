@@ -217,7 +217,188 @@ body {
 }
 
 
+/* Panel de búsqueda: cubre toda la pantalla deslizándose desde la izquierda.
+   position:fixed para no afectar al flujo del borrador ni a su paginación. */
+.panel-buscador {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;              /* por encima de la barra de acciones */
+    background: rgba(0, 0, 0, 0.4);
+    transform: translateX(-100%);
+    opacity: 0;
+    transition: transform 0.35s ease, opacity 0.35s ease;
+    display: flex;
+    /* No toca nada del DOM del borrador: solo cubre. */
+}
+
+.panel-buscador.abierto {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.panel-buscador-contenido {
+    width: min(520px, 90vw);
+    height: 100%;
+    background: #fff;
+    padding: 2rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+}
+
+.lista-resultados {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Cada resultado es una tarjeta con checkbox integrado. */
+.tarjeta-resultado {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.tarjeta-resultado:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+
+.tarjeta-resultado.seleccionada {
+    background: #eff6ff;
+    border-color: #024ebc;
+}
+
+.tarjeta-resultado-info {
+    flex: 1;
+    min-width: 0;      /* para que text-overflow funcione */
+}
+
+.tarjeta-resultado-numero {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.tarjeta-resultado-cliente {
+    font-size: 0.8rem;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tarjeta-resultado-importe {
+    font-weight: 700;
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+/* Badge del estado: colores por tipo */
+.badge-estado {
+    font-size: 0.7rem;
+    padding: 0.2em 0.5em;
+    border-radius: 0.25rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.badge-estado-borrador { background: #fef3c7; color: #92400e; }
+.badge-estado-emitida  { background: #d1fae5; color: #065f46; }
+.badge-estado-anulada  { background: #fee2e2; color: #991b1b; }
+
+/* Sidebar fija a la derecha que contiene la cola de impresión. */
+.sidebar-cola {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100vh;
+    background: #fff;
+    border-left: 1px solid #e2e8f0;
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+    z-index: 1040;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    gap: 0.75rem;
+}
+
+.sidebar-cola-cabecera {
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.lista-cola {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Cada tarjeta de la cola: clicable para previsualizar, con botón de quitar. */
+.tarjeta-cola {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.15s;
+}
+
+.tarjeta-cola:hover {
+    background: #f8fafc;
+}
+
+.tarjeta-cola.activa {
+    border-color: #024ebc;
+    background: #eff6ff;
+}
+
+.tarjeta-cola-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.tarjeta-cola-numero {
+    font-weight: 600;
+}
+
+.tarjeta-cola-importe {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+/* Cuando la sidebar de cola está visible, el cuerpo se encoge para
+   dejar hueco sin que los formatos del borrador se redimensionen. */
+body.con-sidebar {
+    margin-right: 300px;
+}
+
 @media print {
+    /* La sidebar y el panel de búsqueda no se imprimen nunca. */
+    .panel-buscador,
+    .sidebar-cola {
+        display: none !important;
+    }
+
+    /* Al imprimir en lote, cada factura clonada arranca en una página nueva.
+       Los clones llevan esta clase en vez de .hoja-extra. */
+    .factura-lote + .factura-lote {
+        break-before: page;
+    }
     @page {
         /* sin "size:": respeta el papel elegido en el diálogo de impresión.
            El selector JS sobreescribe este bloque si el usuario elige un formato. */

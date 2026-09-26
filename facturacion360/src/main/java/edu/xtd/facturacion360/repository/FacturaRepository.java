@@ -50,6 +50,8 @@ public interface FacturaRepository {
 
 	public List<Factura> buscar(String busqueda);
 	
+	public List<Factura> buscar(String busqueda, String estado);
+	
 	public Factura buscarPorId(int idFactura);
 
 	public Factura buscarPorIdParaActualizar(int idFactura);

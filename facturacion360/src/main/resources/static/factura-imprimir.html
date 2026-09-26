@@ -45,6 +45,10 @@
                 </select>
             </div>
 
+            <button id="botonSeleccionarVarias" type="button" class="btn btn-outline-secondary">
+                <i class="bi bi-collection"></i> Seleccionar varias
+            </button>
+
             <button id="botonImprimir" type="button" class="btn btn-primary" disabled>
                 <i class="bi bi-printer"></i> Imprimir / Guardar PDF
             </button>
@@ -194,5 +198,69 @@
             </section>
         </div>
     </main>
+
+    <!--
+        Panel de selección múltiple de facturas. Se desliza desde la izquierda
+        cubriendo la vista sin moverla: la paginación del borrador no se toca.
+        El CSS lo posiciona con position:fixed y transform:translateX(-100%).
+    -->
+    <aside id="panelBuscador" class="panel-buscador" aria-hidden="true">
+        <div class="panel-buscador-contenido">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="h5 mb-0">Seleccionar facturas</h2>
+                <button id="botonCerrarPanel" type="button"
+                        class="btn-close" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="d-flex gap-2 mb-3">
+                <input id="campoBusquedaFacturas" type="search"
+                       class="form-control" placeholder="Buscar por número o cliente…"
+                       autocomplete="off">
+                <select id="filtroEstado" class="form-select" style="width: auto;">
+                    <option value="">Todos los estados</option>
+                    <option value="BORRADOR" selected>Borrador</option>
+                    <option value="EMITIDA">Emitida</option>
+                    <option value="ANULADA">Anulada</option>
+                </select>
+            </div>
+
+            <p id="contadorResultados" class="small text-muted mb-2"></p>
+
+            <div id="listaResultados" class="lista-resultados"></div>
+
+            <div class="mt-3 d-flex justify-content-end">
+                <button id="botonAgregarSeleccion" type="button"
+                        class="btn btn-primary" disabled>
+                    <i class="bi bi-plus-lg"></i> Añadir a la cola de impresión
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!--
+        Sidebar con las facturas seleccionadas para imprimir en lote.
+        Se despliega a la derecha del visor, empujándolo ligeramente.
+        Cada tarjeta muestra número, cliente e importe total; al hacer
+        clic carga esa factura en la vista principal para previsualizarla.
+    -->
+    <aside id="sidebarCola" class="sidebar-cola d-none" aria-label="Cola de impresión">
+        <div class="sidebar-cola-cabecera d-flex justify-content-between align-items-center">
+            <h3 class="h6 mb-0">
+                Cola de impresión
+                <span id="contadorCola" class="badge bg-primary ms-1">0</span>
+            </h3>
+            <button id="botonLimpiarCola" type="button"
+                    class="btn btn-sm btn-outline-danger" title="Vaciar cola">
+                <i class="bi bi-trash3"></i> Vaciar
+            </button>
+        </div>
+
+        <div id="listaCola" class="lista-cola"></div>
+
+        <button id="botonImprimirTodas" type="button"
+                class="btn btn-primary w-100 mt-auto" disabled>
+            <i class="bi bi-printer"></i> Imprimir todas
+        </button>
+    </aside>
 </body>
 </html>

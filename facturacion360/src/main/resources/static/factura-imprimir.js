@@ -24,10 +24,10 @@ const { fijar, limpiar } = crearAvisos({
     region: document.getElementById("anuncios"),
 });
 
-/** Carga la factura indicada en la dirección de la página. */
-async function cargarDetalleFactura() {
+/** Carga la factura indicada en la dirección de la página o por argumento explícito. */
+async function cargarDetalleFactura(idExplicito) {
     const parametros = new URLSearchParams(window.location.search);
-    const idFactura = Number(parametros.get("idFactura"));
+    const idFactura = idExplicito ?? Number(parametros.get("idFactura"));
 
     if (Number.isInteger(idFactura) && idFactura > 0) {
         try {
@@ -509,3 +509,517 @@ new ResizeObserver(programarPaginar).observe(document.body);
 
 cargarDetalleFactura();
 cargarEmisor();
+
+
+// ── Selección múltiple ──────────────────────────────────────────────
+
+const panelBuscador        = document.getElementById("panelBuscador");
+const botonSeleccionarVarias = document.getElementById("botonSeleccionarVarias");
+const botonCerrarPanel     = document.getElementById("botonCerrarPanel");
+const campoBusqueda        = document.getElementById("campoBusquedaFacturas");
+const filtroEstado         = document.getElementById("filtroEstado");
+const listaResultados      = document.getElementById("listaResultados");
+const contadorResultados   = document.getElementById("contadorResultados");
+const botonAgregarSeleccion = document.getElementById("botonAgregarSeleccion");
+
+const sidebarCola          = document.getElementById("sidebarCola");
+const listaCola            = document.getElementById("listaCola");
+const contadorCola         = document.getElementById("contadorCola");
+const botonLimpiarCola     = document.getElementById("botonLimpiarCola");
+const botonImprimirTodas   = document.getElementById("botonImprimirTodas");
+
+/**
+ * IDs de las facturas marcadas con el checkbox en el panel de búsqueda.
+ * Se usa un Set para garantizar unicidad sin búsquedas lineales.
+ * @type {Set<number>}
+ */
+const marcadas = new Set();
+
+/**
+ * Cola de impresión: facturas completas (cabecera) listas para imprimir.
+ * Se usa un Map id→Factura para mantener el orden de inserción y
+ * permitir eliminación por clave en O(1) sin recorrer un array.
+ * @type {Map<number, object>}
+ */
+const colaImpresion = new Map();
+
+/** Vincula cada nodo tarjeta con su objeto Factura sin contaminar el DOM. */
+const facturasDeTarjeta = new WeakMap();
+
+/** Abre el panel de búsqueda con transición CSS. */
+function abrirPanelBuscador() {
+    marcadas.clear();
+    panelBuscador.classList.add("abierto");
+    panelBuscador.setAttribute("aria-hidden", "false");
+    campoBusqueda.value = "";
+    campoBusqueda.focus();
+    buscarFacturasConRetardo();
+}
+
+/** Cierra el panel de búsqueda con transición CSS. */
+function cerrarPanelBuscador() {
+    panelBuscador.classList.remove("abierto");
+    panelBuscador.setAttribute("aria-hidden", "true");
+}
+
+botonSeleccionarVarias.addEventListener("click", abrirPanelBuscador);
+botonCerrarPanel.addEventListener("click", cerrarPanelBuscador);
+
+// Cerrar al hacer clic en el fondo oscuro (no en el contenido).
+panelBuscador.addEventListener("click", function (evento) {
+    if (evento.target === panelBuscador) {
+        cerrarPanelBuscador();
+    }
+});
+
+let temporizadorBusqueda = 0;
+
+/**
+ * Programa una búsqueda tras 300 ms de inactividad del teclado.
+ * El temporizador anterior se cancela para que solo se ejecute la
+ * última pulsación: sin esto, teclear «FAC» lanzaría tres peticiones.
+ */
+function buscarFacturasConRetardo() {
+    clearTimeout(temporizadorBusqueda);
+    temporizadorBusqueda = setTimeout(ejecutarBusqueda, 300);
+}
+
+/** Llama al endpoint con el texto y el filtro de estado actuales. */
+async function ejecutarBusqueda() {
+    const texto = campoBusqueda.value.trim();
+    const estado = filtroEstado.value;
+
+    const parametros = new URLSearchParams();
+    parametros.set("busqueda", texto);
+    if (estado) {
+        parametros.set("estado", estado);
+    }
+
+    try {
+        const respuesta = await fetch("/factura/buscar?" + parametros);
+        if (!respuesta.ok) {
+            contadorResultados.textContent = "Error al buscar facturas.";
+            return;
+        }
+        const facturas = await respuesta.json();
+        mostrarResultadosBusqueda(facturas);
+    } catch {
+        contadorResultados.textContent = "No se pudo conectar con el servidor.";
+    }
+}
+
+campoBusqueda.addEventListener("input", buscarFacturasConRetardo);
+filtroEstado.addEventListener("change", buscarFacturasConRetardo);
+
+/**
+ * Pinta la lista de facturas devueltas por el buscador.
+ * Cada tarjeta lleva un checkbox que se sincroniza con el Set `marcadas`.
+ *
+ * @param {Array<object>} facturas — lista de facturas del backend
+ */
+function mostrarResultadosBusqueda(facturas) {
+    listaResultados.replaceChildren();
+    
+    // Contar cuántas se van a mostrar (las que no están en cola)
+    let mostradas = 0;
+
+    for (const factura of facturas) {
+        // Las que ya están en la cola no se muestran: no tiene sentido
+        // seleccionar algo que ya va a imprimirse.
+        if (colaImpresion.has(factura.idFactura)) continue;
+
+        const tarjeta = crearTarjetaResultado(factura);
+        listaResultados.appendChild(tarjeta);
+        mostradas++;
+    }
+
+    contadorResultados.textContent = facturas.length + " factura(s) encontrada(s)" 
+        + (facturas.length > mostradas ? ` (${facturas.length - mostradas} ya en cola)` : "");
+    actualizarBotonAgregar();
+}
+
+/**
+ * Construye el nodo DOM de una tarjeta de resultado con su checkbox.
+ *
+ * @param {object} factura — cabecera de la factura
+ * @return {HTMLElement} la tarjeta lista para insertar
+ */
+function crearTarjetaResultado(factura) {
+    const tarjeta = document.createElement("label");
+    tarjeta.className = "tarjeta-resultado";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "form-check-input flex-shrink-0";
+    checkbox.checked = marcadas.has(factura.idFactura);
+
+    checkbox.addEventListener("change", function () {
+        if (this.checked) {
+            marcadas.add(factura.idFactura);
+            tarjeta.classList.add("seleccionada");
+        } else {
+            marcadas.delete(factura.idFactura);
+            tarjeta.classList.remove("seleccionada");
+        }
+        actualizarBotonAgregar();
+    });
+
+    const info = document.createElement("div");
+    info.className = "tarjeta-resultado-info";
+    info.innerHTML =
+        `<div class="tarjeta-resultado-numero">${factura.numeroFactura}</div>` +
+        `<div class="tarjeta-resultado-cliente">${factura.nombreCliente || "—"}</div>`;
+
+    const badge = document.createElement("span");
+    badge.className = "badge-estado badge-estado-" + factura.estado.toLowerCase();
+    badge.textContent = factura.estado;
+
+    const importe = document.createElement("span");
+    importe.className = "tarjeta-resultado-importe";
+    importe.textContent = formatearImporte(factura.total);
+
+    tarjeta.append(checkbox, info, badge, importe);
+
+    if (marcadas.has(factura.idFactura)) {
+        tarjeta.classList.add("seleccionada");
+    }
+
+    facturasDeTarjeta.set(tarjeta, factura);
+
+    return tarjeta;
+}
+
+/** Habilita o deshabilita el botón "Añadir" según haya marcadas. */
+function actualizarBotonAgregar() {
+    botonAgregarSeleccion.disabled = marcadas.size === 0;
+}
+
+/**
+ * Mueve las facturas marcadas a la cola de impresión, cierra el panel
+ * y muestra la sidebar.
+ */
+function agregarMarcadasACola() {
+    for (const tarjeta of listaResultados.querySelectorAll(".tarjeta-resultado")) {
+        const checkbox = tarjeta.querySelector("input[type=checkbox]");
+        if (!checkbox.checked) continue;
+
+        const factura = facturasDeTarjeta.get(tarjeta);
+        colaImpresion.set(factura.idFactura, factura);
+    }
+
+    marcadas.clear();
+    cerrarPanelBuscador();
+    mostrarSidebar();
+}
+
+botonAgregarSeleccion.addEventListener("click", agregarMarcadasACola);
+
+/** Muestra la sidebar y actualiza el cuerpo para dejar hueco. */
+function mostrarSidebar() {
+    sidebarCola.classList.remove("d-none");
+    document.body.classList.add("con-sidebar");
+    actualizarSidebar();
+}
+
+/** Oculta la sidebar y restaura el cuerpo. */
+function ocultarSidebar() {
+    sidebarCola.classList.add("d-none");
+    document.body.classList.remove("con-sidebar");
+}
+
+/** Redibuja el contenido de la sidebar según el estado de la cola. */
+function actualizarSidebar() {
+    listaCola.replaceChildren();
+    contadorCola.textContent = String(colaImpresion.size);
+    botonImprimirTodas.disabled = colaImpresion.size === 0;
+
+    if (colaImpresion.size === 0) {
+        ocultarSidebar();
+        return;
+    }
+
+    // Leemos el idFactura de la URL actual para resaltarlo
+    const idActual = Number(new URLSearchParams(window.location.search).get("idFactura"));
+
+    for (const [id, factura] of colaImpresion) {
+        listaCola.appendChild(crearTarjetaCola(factura));
+    }
+    
+    if (idActual) {
+        resaltarTarjetaActiva(idActual);
+    }
+}
+
+/**
+ * Crea una tarjeta de la cola con botón de quitar y clic para previsualizar.
+ *
+ * @param {object} factura — cabecera de la factura
+ * @return {HTMLElement} la tarjeta
+ */
+function crearTarjetaCola(factura) {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "tarjeta-cola";
+    tarjeta.dataset.id = factura.idFactura;
+
+    const info = document.createElement("div");
+    info.className = "tarjeta-cola-info";
+    info.innerHTML =
+        `<div class="tarjeta-cola-numero">${factura.numeroFactura}</div>` +
+        `<div class="tarjeta-cola-importe">${formatearImporte(factura.total)}</div>`;
+
+    const botonQuitar = document.createElement("button");
+    botonQuitar.type = "button";
+    botonQuitar.className = "btn btn-sm btn-outline-danger flex-shrink-0";
+    botonQuitar.innerHTML = '<i class="bi bi-x-lg"></i>';
+    botonQuitar.title = "Quitar de la cola";
+
+    // Clic en la tarjeta → previsualizar esa factura en el visor principal.
+    info.addEventListener("click", function () {
+        window.history.replaceState(null, "", "?idFactura=" + factura.idFactura);
+        cargarDetalleFactura(factura.idFactura);
+        resaltarTarjetaActiva(factura.idFactura);
+    });
+
+    // Clic en el botón × → quitar de la cola.
+    botonQuitar.addEventListener("click", function (evento) {
+        evento.stopPropagation();
+        colaImpresion.delete(factura.idFactura);
+        actualizarSidebar();
+    });
+
+    tarjeta.append(info, botonQuitar);
+    return tarjeta;
+}
+
+/** Marca visualmente la tarjeta de la factura que se está previsualizando. */
+function resaltarTarjetaActiva(idFactura) {
+    for (const tarjeta of listaCola.children) {
+        tarjeta.classList.toggle("activa",
+                tarjeta.dataset.id === String(idFactura));
+    }
+}
+
+botonLimpiarCola.addEventListener("click", function () {
+    colaImpresion.clear();
+    actualizarSidebar();
+});
+
+
+/**
+ * Construye el HTML completo de la factura.
+ */
+function construirHtmlFactura(detalle) {
+    const f = detalle.factura;
+    const c = detalle.cliente;
+    const emisor = window.__datosEmisor || {}; // Guardado en cargarEmisor
+    const conceptos = detalle.conceptos || [];
+    const desglose = detalle.desglose || [];
+
+    const esBorrador = f.estado === "BORRADOR";
+    const marcaAgua = esBorrador ? `<p class="marca-agua" aria-hidden="true">BORRADOR</p>` : '';
+
+    const qr = !esBorrador ? `
+        <figure class="bloque-verifactu" aria-label="Código QR de verificación fiscal">
+            <p class="rotulo-qr">QR tributario:</p>
+            <img class="qr-verifactu" src="/verifactu/qr/${f.idFactura}" alt="Código QR de validación" onerror="this.closest('.bloque-verifactu').style.display='none'">
+            <figcaption class="leyenda-verifactu">
+                VERI*FACTU<br><small>Factura verificable en la sede electrónica de la AEAT</small>
+            </figcaption>
+        </figure>
+    ` : '';
+
+    let conceptosHtml = '';
+    if (conceptos.length === 0) {
+        conceptosHtml = `<tr><td colspan="7" class="text-center text-muted">Esta factura no tiene conceptos registrados.</td></tr>`;
+    } else {
+        conceptosHtml = conceptos.map(co => `
+            <tr>
+                <td>${co.descripcion || "—"}</td>
+                <td class="text-end">${co.cantidad ?? "—"}</td>
+                <td class="text-end">${formatearImporte(co.precioUnitario)}</td>
+                <td class="text-end">${formatearPorcentaje(co.descuento)}</td>
+                <td class="text-end">${formatearImporte(co.baseImponible)}</td>
+                <td class="text-end">${formatearImporte(co.importeIva)}</td>
+                <td class="text-end">${formatearImporte(co.total)}</td>
+            </tr>
+        `).join('');
+    }
+
+    let desgloseHtml = '';
+    if (desglose.length > 0) {
+        desgloseHtml = desglose.map(d => `
+            <tr>
+                <td class="text-end">${formatearImporte(d.baseImponible)}</td>
+                <td class="text-end">${formatearPorcentaje(d.tipoImpositivo)}</td>
+                <td class="text-end">${formatearImporte(d.cuotaRepercutida)}</td>
+            </tr>
+        `).join('');
+    }
+
+    return `
+        ${marcaAgua}
+        <header class="cabecera-factura d-flex justify-content-between align-items-start gap-4">
+            <div class="d-flex align-items-center gap-3">
+                <img src="/emisor/logo" alt="Logo emisor" class="logo-emisor" style="height: 100px; width: auto; max-height: 100px;" onerror="this.style.display='none'">
+                <div>
+                    <h1 class="h4 mb-0 text-primary">Facturación 360</h1>
+                    <p class="mb-0 text-muted small">Documento de factura</p>
+                </div>
+            </div>
+            <div class="d-flex align-items-start gap-4 ms-auto">
+                <div class="text-end">
+                    <h2 class="h5 mb-1">${f.numeroFactura}</h2>
+                    <p class="mb-0 small">Fecha: ${formatearFecha(f.fechaEmision)}</p>
+                    <p class="mb-0 small text-muted">Estado: ${f.estado}</p>
+                </div>
+                ${qr}
+            </div>
+        </header>
+
+        <div class="datos-partes mb-4">
+            <div class="row">
+                <div class="col-6 border-end">
+                    <section>
+                        <h2 class="h6 fw-bold border-bottom pb-2 mb-2">Emisor</h2>
+                        <p class="fw-bold mb-1">${emisor.nombre || "—"}</p>
+                        <p class="mb-1">NIF/CIF: ${emisor.cif || emisor.nifCif || "—"}</p>
+                        <p class="mb-1">${emisor.direccion || "—"}</p>
+                        <p class="mb-0">${[emisor.telefono, emisor.email].filter(Boolean).join(" · ") || "Sin contacto"}</p>
+                    </section>
+                </div>
+                <div class="col-6">
+                    <section class="ps-2">
+                        <h2 class="h6 fw-bold border-bottom pb-2 mb-2">Cliente</h2>
+                        <p class="fw-bold mb-1">${c.nombre}</p>
+                        <p class="mb-1">NIF/CIF: ${c.nifCif}</p>
+                        <p class="mb-1">${formarDireccion(c)}</p>
+                        <p class="mb-0">${formarContacto(c)}</p>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <section>
+            <h2 class="h5">Conceptos</h2>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">Descripción</th>
+                            <th scope="col" class="text-end">Cantidad</th>
+                            <th scope="col" class="text-end">Precio</th>
+                            <th scope="col" class="text-end">Dto.</th>
+                            <th scope="col" class="text-end">Base</th>
+                            <th scope="col" class="text-end">IVA</th>
+                            <th scope="col" class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>${conceptosHtml}</tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="d-flex justify-content-between align-items-start mt-4 mb-4 gap-4 flex-wrap flex-sm-nowrap fila-desglose-totales">
+            <section class="desglose-factura flex-grow-1 ${desglose.length > 0 ? '' : 'd-none'}">
+                <h2 class="h6">Desglose del IVA</h2>
+                <table class="table table-sm tabla-desglose">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="text-end">Base imponible</th>
+                            <th scope="col" class="text-end">Tipo</th>
+                            <th scope="col" class="text-end">Cuota</th>
+                        </tr>
+                    </thead>
+                    <tbody>${desgloseHtml}</tbody>
+                </table>
+            </section>
+            <div class="totales-factura flex-shrink-0" style="width: 320px; max-width: 100%;">
+                <div><span>Subtotal</span><strong>${formatearImporte(f.subtotal)}</strong></div>
+                <div><span>IVA</span><strong>${formatearImporte(f.importeIva)}</strong></div>
+                <div class="total-final"><span>Total</span><strong>${formatearImporte(f.total)}</strong></div>
+            </div>
+        </div>
+
+        ${f.observaciones && f.observaciones.trim() ? `
+        <section class="observaciones-factura">
+            <h2 class="h5">Observaciones</h2>
+            <p class="mb-0">${f.observaciones}</p>
+        </section>` : ''}
+    `;
+}
+
+/**
+ * Crea un <div> con la misma estructura que el visor pero con los datos
+ * de una factura concreta, listo para imprimir.
+ */
+function crearClonParaImpresion(detalle) {
+    const contenedor = document.createElement("div");
+    contenedor.className = "documento-factura factura-lote";
+    
+    // Todas las hojas clonadas heredan la clase de hoja-estrecha si aplica
+    const hojaEstrecha = documentoFactura.classList.contains("hoja-estrecha");
+    if (hojaEstrecha) {
+        contenedor.classList.add("hoja-estrecha");
+    }
+
+    contenedor.innerHTML = construirHtmlFactura(detalle);
+    return contenedor;
+}
+
+/**
+ * Imprime en lote todas las facturas de la cola.
+ */
+async function imprimirEnLote() {
+    botonImprimirTodas.disabled = true;
+    const textoOriginal = botonImprimirTodas.innerHTML;
+    botonImprimirTodas.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparando…';
+
+    const ids = Array.from(colaImpresion.keys());
+    const peticiones = ids.map(id =>
+        fetch("/factura/" + id + "/detalle").then(r => r.ok ? r.json() : null)
+    );
+
+    const resultados = await Promise.allSettled(peticiones);
+    const detalles = resultados
+        .filter(r => r.status === "fulfilled" && r.value !== null)
+        .map(r => r.value);
+
+    if (detalles.length === 0) {
+        botonImprimirTodas.innerHTML = textoOriginal;
+        botonImprimirTodas.disabled = false;
+        fijar("No se pudieron cargar los datos para imprimir.", { esError: true });
+        return;
+    }
+
+    // Ocultar el visor original y la sidebar durante la impresión.
+    documentoFactura.classList.add("d-none");
+    sidebarCola.classList.add("d-none");
+
+    const clones = [];
+    for (const detalle of detalles) {
+        const clon = crearClonParaImpresion(detalle);
+        document.body.appendChild(clon);
+        clones.push(clon);
+    }
+
+    // Pequeña espera para que el navegador renderice los clones
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
+    window.print();
+
+    // Restaurar: quitar clones, volver a mostrar el visor.
+    for (const clon of clones) {
+        clon.remove();
+    }
+    
+    // Como el documentoFactura vuelve a mostrarse, necesitamos repaginarlo
+    documentoFactura.classList.remove("d-none");
+    sidebarCola.classList.remove("d-none");
+    botonImprimirTodas.innerHTML = textoOriginal;
+    botonImprimirTodas.disabled = false;
+    
+    // Repaginar el documento principal
+    programarPaginar();
+}
+
+botonImprimirTodas.addEventListener("click", imprimirEnLote);
