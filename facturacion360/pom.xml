@@ -65,6 +65,28 @@
 			<artifactId>javase</artifactId>
 			<version>3.5.3</version>
 		</dependency>
+
+		<!--
+		    Plantilla del PDF. Se usa Thymeleaf y no una cadena construida a
+		    mano en Java a propósito: th:text escapa por defecto, y el visor ya
+		    tuvo tres XSS por interpolar datos del servidor en HTML sin escapar.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-thymeleaf</artifactId>
+		</dependency>
+
+		<!--
+		    Render del PDF en servidor. OJO: su motor es CSS 2.1, sin flexbox,
+		    sin grid y sin custom properties, así que NO entiende la hoja del
+		    visor (factura-imprimir.css) y el PDF lleva plantilla y estilos
+		    propios. Que no se desincronicen lo vigila FacturaPdfEstilosTests.
+		-->
+		<dependency>
+			<groupId>com.openhtmltopdf</groupId>
+			<artifactId>openhtmltopdf-pdfbox</artifactId>
+			<version>1.0.10</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>

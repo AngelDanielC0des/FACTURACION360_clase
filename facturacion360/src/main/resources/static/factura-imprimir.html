@@ -49,10 +49,55 @@
                 <i class="bi bi-collection"></i> Seleccionar varias
             </button>
 
+            <!--
+                Compartir. El menú es un popover NATIVO, no un dropdown de Bootstrap:
+                esta página carga el CSS de Bootstrap pero no su bundle de JavaScript,
+                así que un data-bs-toggle no haría nada. Con popovertarget el navegador
+                se encarga de abrirlo y cerrarlo, del cierre con Esc, del cierre al
+                pulsar fuera y del aria-expanded, sin una línea de JS.
+
+                Nace deshabilitado y se habilita cuando la factura termina de cargar,
+                igual que el botón de imprimir.
+            -->
+            <button id="botonCompartir" type="button" class="btn btn-outline-secondary"
+                    popovertarget="menuCompartir" disabled>
+                <i class="bi bi-share" aria-hidden="true"></i> Compartir
+            </button>
+
             <button id="botonImprimir" type="button" class="btn btn-primary" disabled>
                 <i class="bi bi-printer"></i> Imprimir / Guardar PDF
             </button>
         </div>
+    </div>
+
+    <!--
+        Menú de compartir.
+
+        En un móvil, el PDF se entrega al selector del sistema y llega como
+        adjunto de verdad. En un escritorio no hay selector, así que se descarga
+        el PDF y se abre el canal con el texto ya escrito para que el usuario lo
+        adjunte: ni mailto:, ni wa.me, ni t.me pueden llevar ficheros.
+
+        El aviso de arriba solo aparece en borradores.
+    -->
+    <div id="menuCompartir" class="menu-compartir" popover>
+        <p id="avisoCompartirBorrador" class="aviso-borrador d-none">
+            Es un <strong>borrador</strong>: no es una factura válida. El documento sale
+            con su marca de agua y sin QR, y el mensaje lo dirá.
+        </p>
+
+        <button id="compartirWhatsapp" type="button" class="opcion-compartir">
+            <i class="bi bi-whatsapp" aria-hidden="true"></i> WhatsApp
+        </button>
+        <button id="compartirTelegram" type="button" class="opcion-compartir">
+            <i class="bi bi-telegram" aria-hidden="true"></i> Telegram
+        </button>
+        <button id="compartirCorreo" type="button" class="opcion-compartir">
+            <i class="bi bi-envelope" aria-hidden="true"></i> Correo
+        </button>
+        <button id="compartirDescargar" type="button" class="opcion-compartir">
+            <i class="bi bi-download" aria-hidden="true"></i> Solo descargar el PDF
+        </button>
     </div>
 
    <main id="documentoFactura" class="documento-factura" aria-busy="true">

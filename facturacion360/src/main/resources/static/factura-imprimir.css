@@ -680,6 +680,70 @@ body.con-sidebar {
     margin-right: var(--ancho-sidebar);
 }
 
+/*
+ * Menú de compartir. Es un popover NATIVO: el navegador ya le da la capa
+ * superior, el cierre con Esc, el cierre al pulsar fuera y el aria-expanded del
+ * botón, así que aquí solo queda el aspecto.
+ *
+ * Se coloca a mano bajo la barra de acciones en vez de anclarlo al botón con
+ * anchor-name: el posicionamiento por anclaje todavía no está en Firefox ni en
+ * Safari, y la barra está siempre arriba a la derecha, así que una posición fija
+ * acierta sin necesidad de fallback.
+ */
+.menu-compartir {
+    position: fixed;
+    top: 4.5rem;
+    right: 1rem;
+    left: auto;
+    width: min(20rem, calc(100vw - 2rem));
+    margin: 0;
+    padding: 0.5rem;
+    border: 1px solid var(--borde-tarjeta);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+
+.menu-compartir:popover-open {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+/* El aviso de que lo que se va a enviar es un borrador. */
+.aviso-borrador {
+    margin: 0 0 0.5rem;
+    padding: 0.5rem 0.65rem;
+    border-left: 4px solid #b02a37;
+    border-radius: 0.35rem;
+    background-color: #fdecee;
+    color: #842029;
+    font-size: 0.8rem;
+    line-height: 1.35;
+}
+
+.opcion-compartir {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.55rem 0.65rem;
+    border: 0;
+    border-radius: 0.375rem;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.opcion-compartir:hover {
+    background: var(--fondo-hover);
+}
+
+.opcion-compartir i {
+    color: var(--texto-apagado);
+}
+
 @media print {
     /*
      * El cromo de pantalla no se imprime. Sin !important: estas reglas van
@@ -688,7 +752,12 @@ body.con-sidebar {
      * Bootstrap con las que competir.
      */
     .panel-buscador,
-    .sidebar-cola {
+    .sidebar-cola,
+    .menu-compartir,
+    /* Con el menú abierto hace falta repetir el :popover-open: la regla de
+       pantalla que lo pone en flex es más específica que esta, y si el usuario
+       pulsa Ctrl+P con el menú desplegado se imprimiría encima de la factura. */
+    .menu-compartir:popover-open {
         display: none;
     }
 
