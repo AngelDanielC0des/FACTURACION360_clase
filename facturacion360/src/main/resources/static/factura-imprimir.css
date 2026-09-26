@@ -394,6 +394,11 @@ body.con-sidebar {
         display: none !important;
     }
 
+    /* Quitar el margen de la sidebar para que los clones usen todo el ancho del papel */
+    body.con-sidebar {
+        margin-right: 0 !important;
+    }
+
     /* Al imprimir en lote, cada factura clonada arranca en una página nueva.
        Los clones llevan esta clase en vez de .hoja-extra. */
     .factura-lote + .factura-lote {
