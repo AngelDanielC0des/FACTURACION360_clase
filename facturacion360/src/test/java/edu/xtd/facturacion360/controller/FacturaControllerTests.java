@@ -125,22 +125,82 @@ class FacturaControllerTests {
 				.content(PETICION.replace("EMITIDA", "BORRADOR"))).andExpect(status().isOk());
 	}
 
+	/**
+	 * Un id que no puede existir se rechaza antes de preguntar a la base de datos.
+	 *
+	 * <p>El {@code verifyNoInteractions} es la mitad que importa: sin él, esta prueba seguiría
+	 * en verde aunque alguien moviera la comprobación del id detrás de la consulta, y entonces
+	 * cada petición con un id inválido gastaría una ida a la base de datos para nada.</p>
+	 */
 	@Test
-	void edicionValidaIdEstadoYConceptosAntesDeEscribir() throws Exception {
+	void idInvalidoSeRechazaSinTocarElRepositorio() throws Exception {
 		String borrador = PETICION.replace("EMITIDA", "BORRADOR");
+
 		clienteHttp.perform(put("/factura/0/borrador").contentType(MediaType.APPLICATION_JSON).content(borrador))
 				.andExpect(status().isBadRequest());
-		clienteHttp.perform(put("/factura/7/borrador").contentType(MediaType.APPLICATION_JSON).content(PETICION))
-				.andExpect(status().isNotFound());
+
+		verifyNoInteractions(repositorio);
+	}
+
+	/**
+	 * Una línea con una cantidad imposible se para en la validación, no en la base de datos.
+	 *
+	 * <p>Los tres valores son los tres agujeros distintos: el cero, el fraccionario —que el
+	 * lector de JSON truncaría a entero si no se leyera como {@code BigDecimal}— y el que se
+	 * sale de un {@code int}.</p>
+	 */
+	@Test
+	void conceptosInvalidosSeRechazanSinTocarElRepositorio() throws Exception {
+		String borrador = PETICION.replace("EMITIDA", "BORRADOR");
+
 		for (String cantidad : java.util.List.of("0", "1.5", "2147483648")) {
 			clienteHttp.perform(put("/factura/7/borrador").contentType(MediaType.APPLICATION_JSON)
-					.content(borrador.replace("\"cantidad\":2", "\"cantidad\":" + cantidad))).andExpect(status().isBadRequest());
+					.content(borrador.replace("\"cantidad\":2", "\"cantidad\":" + cantidad)))
+					.andExpect(status().isBadRequest());
 		}
-		//verifyNoInteractions(repositorio);
+
+		verifyNoInteractions(repositorio);
+	}
+
+	/**
+	 * Una factura que no está devuelve 404, y solo se pregunta por ella una vez.
+	 *
+	 * <p>Ojo con lo que NO comprueba esta prueba: el estado que venga en el cuerpo no se mira
+	 * aquí. {@code FacturaRequest} admite {@code BORRADOR}, {@code EMITIDA} y {@code ANULADA}
+	 * por igual, así que una petición con {@code EMITIDA} pasa la validación y llega al
+	 * repositorio como cualquier otra. Quien decide si se puede editar es el estado
+	 * <strong>guardado</strong>, y eso se comprueba en
+	 * {@link #edicionRechazaFacturaQueYaNoEsBorrador()}.</p>
+	 */
+	@Test
+	void idInexistenteDevuelve404YConsultaUnaSolaVez() throws Exception {
+		String borrador = PETICION.replace("EMITIDA", "BORRADOR");
+
 		clienteHttp.perform(put("/factura/99/borrador").contentType(MediaType.APPLICATION_JSON).content(borrador))
 				.andExpect(status().isNotFound());
+
 		verify(repositorio).buscarPorIdParaActualizar(99);
-		//verifyNoMoreInteractions(repositorio);
+		verifyNoMoreInteractions(repositorio);
+	}
+
+	/**
+	 * Editar una factura que ya está emitida no escribe nada.
+	 *
+	 * <p>Aquí la factura <strong>sí existe</strong>, así que el 404 no tapa el caso: lo que se
+	 * comprueba es que, sabiendo que está emitida, no se llegue a escribir. El
+	 * {@code never()} sobre {@code actualizarBorrador} es lo único que lo demuestra — devolver
+	 * el código de error correcto y haber escrito igualmente sería indistinguible sin él.</p>
+	 */
+	@Test
+	void edicionRechazaFacturaQueYaNoEsBorrador() throws Exception {
+		prepararBorrador("EMITIDA", "F-2026-0007", "2026-01-01");
+
+		clienteHttp.perform(put("/factura/7/borrador").contentType(MediaType.APPLICATION_JSON)
+				.content(PETICION.replace("EMITIDA", "BORRADOR")))
+				.andExpect(status().isConflict());
+
+		verify(repositorio, never()).actualizarBorrador(any());
+		verify(repositorio, never()).eliminarConceptos(anyInt());
 	}
 
 	@Test
