@@ -28,8 +28,8 @@ public class ClienteMapper {
 					normalizar(clienteRequest.nifCif()),
 					clienteRequest.direccion(),
 					clienteRequest.codigoPostal(),
-					clienteRequest.poblacion(),
-					clienteRequest.provincia(),
+					limpiarTexto(clienteRequest.poblacion()),
+					limpiarTexto(clienteRequest.provincia()),
 					clienteRequest.telefono(),
 					clienteRequest.email(),
 					null);
@@ -86,6 +86,40 @@ public class ClienteMapper {
 	 */
 	private static String normalizar(String documento) {
 		return documento == null ? null : documento.trim().toUpperCase();
+	}
+
+	/**
+	 * Deja un nombre de lugar sin espacios sobrantes, respetando cómo se escribió.
+	 *
+	 * <p>Se aplica a población y provincia porque son las dos que alimentan los desplegables
+	 * del filtro, que salen de un {@code SELECT DISTINCT}: un espacio de más convierte
+	 * «Madrid&nbsp;» en una provincia distinta de «Madrid», y las dos aparecen en la lista.</p>
+	 *
+	 * <p>De las mayúsculas NO se encarga esto, y es a propósito: la collation de la tabla es
+	 * {@code utf8mb4_0900_ai_ci}, que ya compara ignorando mayúsculas y acentos, así que
+	 * «madrid» y «Madrid» se agrupan solos. Lo que esas collations <strong>no</strong> ignoran
+	 * es el espacio final —son NO PAD, al revés que las antiguas—, y por eso el {@code trim} sí
+	 * hace falta. Tampoco se sube a mayúsculas como en {@link #normalizar(String)}: ahí tiene
+	 * sentido porque un NIF se escribe así, pero una provincia en mayúsculas quedaría gritando
+	 * en la ficha.</p>
+	 *
+	 * <p><strong>Las dos barras de {@code "\\s+"} no son opcionales.</strong> Desde Java 15,
+	 * {@code \s} dentro de un literal es un escape que vale <em>un espacio</em>, así que
+	 * {@code "\s+"} —con una sola— se compila sin error y produce la expresión {@code " +"},
+	 * que no toca los tabuladores. Y un tabulador hace exactamente lo mismo que el espacio de
+	 * más con una collation NO PAD: duplica la entrada del desplegable. Está fijado en
+	 * {@code ClienteMapperTests}.</p>
+	 *
+	 * <p>No se aplica a nombre ni dirección aunque también puedan traer espacios: esos dos no
+	 * se usan como clave de agrupación ni de filtro, así que un espacio de más se ve feo pero
+	 * no duplica nada. Si algún día se filtra por ellos, tendrán que pasar por aquí.</p>
+	 *
+	 * @param valor lo que vino en la petición
+	 * @return el mismo texto sin espacios en los extremos y sin repetirlos dentro, o
+	 *         {@code null} si no venía
+	 */
+	private static String limpiarTexto(String valor) {
+		return valor == null ? null : valor.trim().replaceAll("\\s+", " ");
 	}
 
 }
