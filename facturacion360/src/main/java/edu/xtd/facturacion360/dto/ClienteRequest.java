@@ -55,6 +55,17 @@ public record ClienteRequest(
         @Size(max = 15, message = "El teléfono no puede superar 15 caracteres")
         String telefono,
 
+        // AVISO: 30 se queda corto para correos reales, y esto NO es un descuadre entre capas
+        // -la columna, este @Size y el maxlength del formulario dicen los tres 30-, sino un
+        // limite mal elegido. Un correo de empresa como administracion@fundaciononce.es son 31
+        // caracteres y se rechaza; el propio emisor que trae el volcado, fundaciononce@
+        // fundaciononce.es, son 29 y pasa por un pelo. La RFC 5321 admite 254.
+        //
+        // No se cambia aqui a proposito: subirlo exige tocar las tres capas a la vez, y la
+        // columna es ALTER TABLE clientes MODIFY email varchar(100). Ampliar un varchar es
+        // seguro -no toca datos ni rompe ningun INSERT- pero sigue siendo un cambio de
+        // esquema, y esos se acuerdan antes de hacerlos. ContratoClienteTests vigila que las
+        // tres sigan diciendo lo mismo el dia que se suba.
         @Email(message = "El email debe tener un formato válido")
         @Size(max = 30, message = "El email no puede superar 30 caracteres")
         String email
