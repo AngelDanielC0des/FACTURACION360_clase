@@ -20,7 +20,14 @@ set -euo pipefail
 
 BASE="${1:?Falta la URL base}"
 INTENTOS=12          # 12 x 5 s = un minuto de margen
-UMBRAL_MS=500        # por debajo de esto damos la aplicación por despierta
+
+# El umbral cuenta la latencia de RED, no solo el arranque. Medido contra el mismo
+# endpoint: desde España, 74-113 ms en caliente; desde un runner de GitHub, 503-858 ms.
+# Con 500 ms la aplicación estaba despierta —respondía 200 las doce veces— y el script
+# la daba por dormida. 1500 es el peor caso observado desde el runner con margen, y
+# sigue muy por debajo de un arranque en frío (5,2 s). Si se mide desde otro sitio,
+# hay que revisarlo.
+UMBRAL_MS=1500       # por debajo de esto damos la aplicación por despierta
 
 echo "Despertando $BASE"
 
