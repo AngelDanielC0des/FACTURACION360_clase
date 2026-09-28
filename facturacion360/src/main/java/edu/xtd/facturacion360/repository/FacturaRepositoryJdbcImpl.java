@@ -131,6 +131,43 @@ public class FacturaRepositoryJdbcImpl implements FacturaRepository {
 	}
 
 	@Override
+	public List<Factura> buscar(String busqueda, String estado) {
+		StringBuilder sql = new StringBuilder("SELECT ")
+				.append(COLUMNAS_FACTURA)
+				.append(" FROM facturas f INNER JOIN clientes c ON f.idcliente = c.idcliente");
+
+		List<Object> parametros = new ArrayList<>();
+		List<String> condiciones = new ArrayList<>();
+
+		boolean hayBusqueda = busqueda != null && !busqueda.isBlank();
+		boolean hayEstado   = estado != null && !estado.isBlank();
+
+		if (hayBusqueda) {
+			condiciones.add("(f.num_factura LIKE ? ESCAPE '\\\\' OR c.nombre LIKE ? ESCAPE '\\\\')");
+			String textoBuscado = "%" + escaparComodines(busqueda.trim()) + "%";
+			parametros.add(textoBuscado);
+			parametros.add(textoBuscado);
+		}
+
+		if (hayEstado) {
+			condiciones.add("f.estado = ?");
+			parametros.add(estado.toUpperCase());
+		}
+
+		if (!condiciones.isEmpty()) {
+			sql.append(" WHERE ").append(String.join(" AND ", condiciones));
+		}
+
+		sql.append(" ORDER BY f.fecha_emision DESC, f.idfactura DESC");
+
+		List<Factura> facturas = jdbcTemplate.query(
+				sql.toString(), facturaRowMapper, parametros.toArray());
+
+		log.debug("buscar({}, estado={}) devuelve {} facturas", busqueda, estado, facturas.size());
+		return facturas;
+	}
+
+	@Override
 	public Factura buscarPorId(int idFactura) {
 		String sql = "SELECT " + COLUMNAS_FACTURA + " FROM facturas f "
 				+ "INNER JOIN clientes c ON f.idcliente = c.idcliente WHERE f.idfactura = ?";

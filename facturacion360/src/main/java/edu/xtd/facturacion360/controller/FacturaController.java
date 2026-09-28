@@ -62,10 +62,14 @@ public class FacturaController {
 
 	@GetMapping("/buscar")
 	public ResponseEntity<List<Factura>> buscar(
-			@RequestParam(required = false, defaultValue = "") String busqueda) {
-		List<Factura> facturas = facturaService.buscar(busqueda);
-		ResponseEntity<List<Factura>> respuesta = ResponseEntity.ok(facturas);
-		return respuesta;
+			@RequestParam(required = false, defaultValue = "") String busqueda,
+			@RequestParam(required = false, defaultValue = "") String estado) {
+
+		List<Factura> facturas = estado.isBlank()
+				? facturaService.buscar(busqueda)
+				: facturaService.buscar(busqueda, estado);
+
+		return ResponseEntity.ok(facturas);
 	}
 
 

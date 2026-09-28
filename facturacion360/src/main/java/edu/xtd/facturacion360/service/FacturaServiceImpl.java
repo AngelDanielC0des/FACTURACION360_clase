@@ -225,6 +225,11 @@ public class FacturaServiceImpl implements FacturaService {
 	}
 
 	@Override
+	public List<Factura> buscar(String busqueda, String estado) {
+		return facturaRepository.buscar(busqueda, estado);
+	}
+
+	@Override
 	public List<SugerenciaConcepto> buscarSugerenciasConceptos(String texto, int limite) {
 		String textoBuscado = texto == null ? "" : texto.trim();
 		if (textoBuscado.length() < 2 || textoBuscado.length() > 50) {

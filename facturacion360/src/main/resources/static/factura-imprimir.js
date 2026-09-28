@@ -24,10 +24,10 @@ const { fijar, limpiar } = crearAvisos({
     region: document.getElementById("anuncios"),
 });
 
-/** Carga la factura indicada en la dirección de la página. */
-async function cargarDetalleFactura() {
+/** Carga la factura indicada en la dirección de la página o por argumento explícito. */
+async function cargarDetalleFactura(idExplicito) {
     const parametros = new URLSearchParams(window.location.search);
-    const idFactura = Number(parametros.get("idFactura"));
+    const idFactura = idExplicito ?? Number(parametros.get("idFactura"));
 
     if (Number.isInteger(idFactura) && idFactura > 0) {
         try {
@@ -167,16 +167,30 @@ function mostrarQr(esBorrador, idFactura) {
     bloqueQr.classList.remove("d-none");
 }
 
-/** Carga los datos de la informacion del emisor */
-async function cargarEmisor() {
+/**
+ * Los datos del emisor, que son los mismos para todas las facturas.
+ *
+ * Se guarda la PROMESA y no el resultado para que la impresión en lote pueda
+ * esperarla en vez de pintar los clones con lo que hubiera cargado. Antes esto
+ * era un `window.__datosEmisor` que nadie asignaba nunca, así que todas las
+ * facturas impresas en lote salían con el emisor a "—".
+ *
+ * @type {Promise<object|null>}
+ */
+let emisorCargado = Promise.resolve(null);
+
+/** Pide los datos del emisor, los pinta en el visor y los devuelve. */
+async function pedirEmisor() {
     try {
         const respuesta = await fetch("/emisor");
-        if (respuesta.ok) {
-            const emisor = await respuesta.json();
-            mostrarEmisor(emisor);
-        }
+        if (!respuesta.ok) return null;
+
+        const emisor = await respuesta.json();
+        mostrarEmisor(emisor);
+        return emisor;
     } catch (error) {
         console.error("Error al cargar los datos del emisor", error);
+        return null;
     }
 }
 /** Muestra los datos de la informacion del emisor */
@@ -226,6 +240,30 @@ function formatearImporte(importe) {
 function formatearPorcentaje(porcentaje) {
     const valor = porcentaje == null ? 0 : porcentaje;
     return Number(valor).toLocaleString("es-ES") + " %";
+}
+
+const ESCAPES_HTML = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+};
+
+/**
+ * Escapa un dato del servidor antes de interpolarlo en una plantilla HTML.
+ *
+ * El visor pinta con textContent y no necesita nada de esto, pero la plantilla
+ * de la impresión en lote se construye como cadena de texto: sin escapar, un
+ * cliente llamado `<img src=x onerror=...>` ejecutaría su código en cuanto se
+ * añadiera a la cola. Los importes y las fechas pasan igual por aquí: cuesta lo
+ * mismo y así no hay que acordarse de qué campo es de fiar.
+ *
+ * @param {*} valor lo que se va a interpolar
+ * @return {string} el mismo texto, sin caracteres que abran una etiqueta
+ */
+function escaparHtml(valor) {
+    return String(valor ?? "").replace(/[&<>"']/g, caracter => ESCAPES_HTML[caracter]);
 }
 
 function mostrarError(mensaje) {
@@ -508,4 +546,585 @@ actualizarFormatoPapel();
 new ResizeObserver(programarPaginar).observe(document.body);
 
 cargarDetalleFactura();
-cargarEmisor();
+// Se guarda la promesa: la impresión en lote la espera antes de pintar los clones.
+emisorCargado = pedirEmisor();
+
+
+// ── Selección múltiple ──────────────────────────────────────────────
+
+const panelBuscador        = document.getElementById("panelBuscador");
+const botonSeleccionarVarias = document.getElementById("botonSeleccionarVarias");
+const botonCerrarPanel     = document.getElementById("botonCerrarPanel");
+const campoBusqueda        = document.getElementById("campoBusquedaFacturas");
+const filtroEstado         = document.getElementById("filtroEstado");
+const listaResultados      = document.getElementById("listaResultados");
+const contadorResultados   = document.getElementById("contadorResultados");
+const botonAgregarSeleccion = document.getElementById("botonAgregarSeleccion");
+
+const sidebarCola          = document.getElementById("sidebarCola");
+const listaCola            = document.getElementById("listaCola");
+const contadorCola         = document.getElementById("contadorCola");
+const botonLimpiarCola     = document.getElementById("botonLimpiarCola");
+const botonImprimirTodas   = document.getElementById("botonImprimirTodas");
+
+/**
+ * Facturas marcadas con el checkbox en el panel de búsqueda, por id.
+ *
+ * Es un Map y no un Set porque al pasarlas a la cola hace falta la factura
+ * entera, no solo su id. Con un Set había que recorrer otra vez el DOM leyendo
+ * los checkboxes y sacar la factura de un WeakMap auxiliar: dos fuentes de
+ * verdad para el mismo dato, y la de verdad era el DOM.
+ *
+ * @type {Map<number, object>}
+ */
+const marcadas = new Map();
+
+/**
+ * Cola de impresión: facturas completas (cabecera) listas para imprimir.
+ * Se usa un Map id→Factura para mantener el orden de inserción y
+ * permitir eliminación por clave en O(1) sin recorrer un array.
+ * @type {Map<number, object>}
+ */
+const colaImpresion = new Map();
+
+/** Abre el panel de búsqueda con transición CSS. */
+function abrirPanelBuscador() {
+    marcadas.clear();
+    panelBuscador.classList.add("abierto");
+    panelBuscador.setAttribute("aria-hidden", "false");
+    campoBusqueda.value = "";
+    campoBusqueda.focus();
+    buscarFacturasConRetardo();
+}
+
+/** Cierra el panel de búsqueda con transición CSS. */
+function cerrarPanelBuscador() {
+    panelBuscador.classList.remove("abierto");
+    panelBuscador.setAttribute("aria-hidden", "true");
+}
+
+botonSeleccionarVarias.addEventListener("click", abrirPanelBuscador);
+botonCerrarPanel.addEventListener("click", cerrarPanelBuscador);
+
+// Cerrar al hacer clic en el fondo oscuro (no en el contenido).
+panelBuscador.addEventListener("click", function (evento) {
+    if (evento.target === panelBuscador) {
+        cerrarPanelBuscador();
+    }
+});
+
+let temporizadorBusqueda = 0;
+
+/**
+ * Programa una búsqueda tras 300 ms de inactividad del teclado.
+ * El temporizador anterior se cancela para que solo se ejecute la
+ * última pulsación: sin esto, teclear «FAC» lanzaría tres peticiones.
+ */
+function buscarFacturasConRetardo() {
+    clearTimeout(temporizadorBusqueda);
+    temporizadorBusqueda = setTimeout(ejecutarBusqueda, 300);
+}
+
+/** Llama al endpoint con el texto y el filtro de estado actuales. */
+async function ejecutarBusqueda() {
+    const texto = campoBusqueda.value.trim();
+    const estado = filtroEstado.value;
+
+    const parametros = new URLSearchParams();
+    parametros.set("busqueda", texto);
+    if (estado) {
+        parametros.set("estado", estado);
+    }
+
+    try {
+        const respuesta = await fetch("/factura/buscar?" + parametros);
+        if (!respuesta.ok) {
+            contadorResultados.textContent = "Error al buscar facturas.";
+            return;
+        }
+        const facturas = await respuesta.json();
+        mostrarResultadosBusqueda(facturas);
+    } catch {
+        contadorResultados.textContent = "No se pudo conectar con el servidor.";
+    }
+}
+
+campoBusqueda.addEventListener("input", buscarFacturasConRetardo);
+filtroEstado.addEventListener("change", buscarFacturasConRetardo);
+
+/**
+ * Pinta la lista de facturas devueltas por el buscador.
+ * Cada tarjeta lleva un checkbox que se sincroniza con el Set `marcadas`.
+ *
+ * @param {Array<object>} facturas — lista de facturas del backend
+ */
+function mostrarResultadosBusqueda(facturas) {
+    // Las que ya están en la cola no se ofrecen: no tiene sentido seleccionar
+    // algo que ya va a imprimirse.
+    const seleccionables = facturas.filter(factura => !colaImpresion.has(factura.idFactura));
+    const yaEnCola = facturas.length - seleccionables.length;
+
+    listaResultados.replaceChildren(
+            ...seleccionables.map(factura => crearTarjetaResultado(factura)));
+
+    contadorResultados.textContent = facturas.length + " factura(s) encontrada(s)"
+        + (yaEnCola > 0 ? ` (${yaEnCola} ya en cola)` : "");
+    actualizarBotonAgregar();
+}
+
+/**
+ * Construye el nodo DOM de una tarjeta de resultado con su checkbox.
+ *
+ * @param {object} factura — cabecera de la factura
+ * @return {HTMLElement} la tarjeta lista para insertar
+ */
+function crearTarjetaResultado(factura) {
+    const tarjeta = document.createElement("label");
+    tarjeta.className = "tarjeta-resultado";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "form-check-input flex-shrink-0";
+    checkbox.checked = marcadas.has(factura.idFactura);
+
+    /** El estado de la marca vive en el Map; la clase solo lo refleja. */
+    function sincronizarMarca() {
+        if (checkbox.checked) {
+            marcadas.set(factura.idFactura, factura);
+        } else {
+            marcadas.delete(factura.idFactura);
+        }
+        tarjeta.classList.toggle("seleccionada", checkbox.checked);
+    }
+
+    checkbox.addEventListener("change", () => {
+        sincronizarMarca();
+        actualizarBotonAgregar();
+    });
+
+    const info = crearBloque("tarjeta-resultado-info", [
+        ["tarjeta-resultado-numero", factura.numeroFactura],
+        ["tarjeta-resultado-cliente", factura.nombreCliente || "—"],
+    ]);
+
+    // El estado admite nulo en la base de datos. Sin el resguardo, una factura
+    // sin estado rompía el .map() entero y el panel contaba un error de
+    // conexión que no había ocurrido.
+    const estado = factura.estado || "SIN ESTADO";
+    const badge = document.createElement("span");
+    badge.className = "badge-estado badge-estado-" + estado.toLowerCase();
+    badge.textContent = estado;
+
+    const importe = document.createElement("span");
+    importe.className = "tarjeta-resultado-importe";
+    importe.textContent = formatearImporte(factura.total);
+
+    tarjeta.append(checkbox, info, badge, importe);
+    tarjeta.classList.toggle("seleccionada", checkbox.checked);
+
+    return tarjeta;
+}
+
+/**
+ * Arma el bloque de dos líneas que comparten las tarjetas del panel y de la
+ * cola. Se pinta con textContent y no con innerHTML: el número de factura y el
+ * nombre del cliente vienen del servidor, y por ahí entraba HTML ajeno.
+ *
+ * @param {string} clase clase del contenedor
+ * @param {Array<[string, string]>} lineas pares clase/texto, en orden
+ * @return {HTMLElement}
+ */
+function crearBloque(clase, lineas) {
+    const contenedor = document.createElement("div");
+    contenedor.className = clase;
+
+    for (const [claseLinea, texto] of lineas) {
+        const linea = document.createElement("div");
+        linea.className = claseLinea;
+        linea.textContent = texto;
+        contenedor.append(linea);
+    }
+
+    return contenedor;
+}
+
+/** Habilita o deshabilita el botón "Añadir" según haya marcadas. */
+function actualizarBotonAgregar() {
+    botonAgregarSeleccion.disabled = marcadas.size === 0;
+}
+
+/**
+ * Mueve las facturas marcadas a la cola de impresión, cierra el panel
+ * y muestra la sidebar.
+ */
+function agregarMarcadasACola() {
+    for (const [id, factura] of marcadas) {
+        colaImpresion.set(id, factura);
+    }
+
+    marcadas.clear();
+    cerrarPanelBuscador();
+    mostrarSidebar();
+}
+
+botonAgregarSeleccion.addEventListener("click", agregarMarcadasACola);
+
+/** Muestra la sidebar y actualiza el cuerpo para dejar hueco. */
+function mostrarSidebar() {
+    sidebarCola.classList.remove("d-none");
+    document.body.classList.add("con-sidebar");
+    actualizarSidebar();
+}
+
+/** Oculta la sidebar y restaura el cuerpo. */
+function ocultarSidebar() {
+    sidebarCola.classList.add("d-none");
+    document.body.classList.remove("con-sidebar");
+}
+
+/** Redibuja el contenido de la sidebar según el estado de la cola. */
+function actualizarSidebar() {
+    contadorCola.textContent = String(colaImpresion.size);
+    botonImprimirTodas.disabled = colaImpresion.size === 0;
+
+    if (colaImpresion.size === 0) {
+        listaCola.replaceChildren();
+        ocultarSidebar();
+        return;
+    }
+
+    listaCola.replaceChildren(
+            ...Array.from(colaImpresion.values(), factura => crearTarjetaCola(factura)));
+
+    // La factura que el visor está enseñando se resalta en la cola.
+    const idActual = Number(new URLSearchParams(window.location.search).get("idFactura"));
+    if (idActual) {
+        resaltarTarjetaActiva(idActual);
+    }
+}
+
+/**
+ * Crea una tarjeta de la cola con botón de quitar y clic para previsualizar.
+ *
+ * @param {object} factura — cabecera de la factura
+ * @return {HTMLElement} la tarjeta
+ */
+function crearTarjetaCola(factura) {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "tarjeta-cola";
+    tarjeta.dataset.id = factura.idFactura;
+
+    /*
+     * La previsualización se dispara desde un <button> y no desde el <div> con
+     * un onclick que había antes: así se llega a ella con el tabulador y
+     * responde a Intro y a la barra espaciadora, cosa que un div no hace por
+     * mucho cursor de mano que se le ponga. El CSS le quita el aspecto de
+     * botón, no su semántica.
+     */
+    const previsualizar = document.createElement("button");
+    previsualizar.type = "button";
+    previsualizar.className = "tarjeta-cola-previsualizar";
+    previsualizar.title = "Previsualizar esta factura";
+    previsualizar.append(crearBloque("tarjeta-cola-info", [
+        ["tarjeta-cola-numero", factura.numeroFactura],
+        ["tarjeta-cola-importe", formatearImporte(factura.total)],
+    ]));
+
+    previsualizar.addEventListener("click", () => {
+        window.history.replaceState(null, "", "?idFactura=" + factura.idFactura);
+        cargarDetalleFactura(factura.idFactura);
+        resaltarTarjetaActiva(factura.idFactura);
+    });
+
+    const quitar = document.createElement("button");
+    quitar.type = "button";
+    quitar.className = "btn btn-sm btn-outline-danger flex-shrink-0";
+    quitar.innerHTML = '<i class="bi bi-x-lg"></i>';
+    quitar.title = "Quitar de la cola";
+
+    // Sin stopPropagation: los dos botones son hermanos, así que el clic en el
+    // aspa nunca pasó por el de previsualizar. Era una defensa contra un
+    // burbujeo que no existe.
+    quitar.addEventListener("click", () => {
+        colaImpresion.delete(factura.idFactura);
+        actualizarSidebar();
+    });
+
+    tarjeta.append(previsualizar, quitar);
+    return tarjeta;
+}
+
+/** Marca visualmente la tarjeta de la factura que se está previsualizando. */
+function resaltarTarjetaActiva(idFactura) {
+    for (const tarjeta of listaCola.children) {
+        tarjeta.classList.toggle("activa",
+                tarjeta.dataset.id === String(idFactura));
+    }
+}
+
+botonLimpiarCola.addEventListener("click", function () {
+    colaImpresion.clear();
+    actualizarSidebar();
+});
+
+
+/**
+ * Construye el HTML de una factura para imprimirla en lote.
+ *
+ * Es la misma maquetación que el visor, pero como cadena de texto en vez de
+ * como DOM: los clones se crean de golpe y no pasan por mostrarDetalle(). Por
+ * eso todo lo que venga del servidor se interpola con escaparHtml().
+ *
+ * El emisor llega por parámetro y no se lee de una variable global: así la
+ * función depende solo de lo que se le pasa y quien la llama es responsable de
+ * haber esperado su carga.
+ *
+ * @param {object} detalle factura, cliente, conceptos y desglose
+ * @param {object} emisor  datos del emisor, o {} si no se pudieron cargar
+ * @return {string} el HTML del documento
+ */
+function construirHtmlFactura(detalle, emisor) {
+    const f = detalle.factura;
+    const c = detalle.cliente;
+    const conceptos = detalle.conceptos || [];
+    const desglose = detalle.desglose || [];
+
+    const esBorrador = f.estado === "BORRADOR";
+    const marcaAgua = esBorrador ? `<p class="marca-agua" aria-hidden="true">BORRADOR</p>` : '';
+
+    // Mismo onerror que el visor (d-none, no style inline): un QR que no carga
+    // se esconde entero, con su rótulo y su leyenda.
+    const qr = !esBorrador ? `
+        <figure class="bloque-verifactu" aria-label="Código QR de verificación fiscal">
+            <p class="rotulo-qr">QR tributario:</p>
+            <img class="qr-verifactu" src="/verifactu/qr/${encodeURIComponent(f.idFactura)}" alt="Código QR para verificar esta factura en la sede electrónica de la AEAT" onerror="this.closest('.bloque-verifactu').classList.add('d-none')">
+            <figcaption class="leyenda-verifactu">
+                VERI*FACTU<small>Factura verificable en la sede electrónica de la AEAT</small>
+            </figcaption>
+        </figure>
+    ` : '';
+
+    const conceptosHtml = conceptos.length === 0
+        ? `<tr><td colspan="7" class="text-center text-muted">Esta factura no tiene conceptos registrados.</td></tr>`
+        : conceptos.map(co => `
+            <tr>
+                <td>${escaparHtml(co.descripcion || "—")}</td>
+                <td class="text-end">${escaparHtml(co.cantidad ?? "—")}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(co.precioUnitario))}</td>
+                <td class="text-end">${escaparHtml(formatearPorcentaje(co.descuento))}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(co.baseImponible))}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(co.importeIva))}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(co.total))}</td>
+            </tr>
+        `).join('');
+
+    const desgloseHtml = desglose.map(d => `
+            <tr>
+                <td class="text-end">${escaparHtml(formatearImporte(d.baseImponible))}</td>
+                <td class="text-end">${escaparHtml(formatearPorcentaje(d.tipoImpositivo))}</td>
+                <td class="text-end">${escaparHtml(formatearImporte(d.cuotaRepercutida))}</td>
+            </tr>
+        `).join('');
+
+    return `
+        ${marcaAgua}
+        <header class="cabecera-factura d-flex justify-content-between align-items-start">
+            <div class="d-flex align-items-center gap-3">
+                <img src="/emisor/logo" alt="Logo emisor" class="logo-emisor" onerror="this.style.display='none'">
+                <div>
+                    <h1 class="h4 mb-0 text-primary">Facturación 360</h1>
+                    <p class="mb-0 text-muted small">Documento de factura</p>
+                </div>
+            </div>
+            <div class="cabecera-identificacion d-flex align-items-start ms-auto">
+                <div class="datos-identificacion">
+                    <h2 class="h5 mb-1">${escaparHtml(f.numeroFactura)}</h2>
+                    <p class="mb-0 small">Fecha: ${escaparHtml(formatearFecha(f.fechaEmision))}</p>
+                    <p class="mb-0 small text-muted">Estado: ${escaparHtml(f.estado)}</p>
+                </div>
+                ${qr}
+            </div>
+        </header>
+
+        <div class="datos-partes">
+            <div class="row">
+                <div class="col-6 border-end">
+                    <section>
+                        <h2 class="h6 fw-bold border-bottom pb-2 mb-2">Emisor</h2>
+                        <p class="fw-bold mb-1">${escaparHtml(emisor.nombre || "—")}</p>
+                        <p class="mb-1">NIF/CIF: ${escaparHtml(emisor.cif || emisor.nifCif || "—")}</p>
+                        <p class="mb-1">${escaparHtml(emisor.direccion || "—")}</p>
+                        <p class="mb-0">${escaparHtml([emisor.telefono, emisor.email].filter(Boolean).join(" · ") || "Sin contacto")}</p>
+                    </section>
+                </div>
+                <div class="col-6">
+                    <section class="ps-2">
+                        <h2 class="h6 fw-bold border-bottom pb-2 mb-2">Cliente</h2>
+                        <p class="fw-bold mb-1">${escaparHtml(c.nombre)}</p>
+                        <p class="mb-1">NIF/CIF: ${escaparHtml(c.nifCif)}</p>
+                        <p class="mb-1">${escaparHtml(formarDireccion(c))}</p>
+                        <p class="mb-0">${escaparHtml(formarContacto(c))}</p>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <section>
+            <h2 class="h5">Conceptos</h2>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">Descripción</th>
+                            <th scope="col" class="text-end">Cantidad</th>
+                            <th scope="col" class="text-end">Precio</th>
+                            <th scope="col" class="text-end">Dto.</th>
+                            <th scope="col" class="text-end">Base</th>
+                            <th scope="col" class="text-end">IVA</th>
+                            <th scope="col" class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>${conceptosHtml}</tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap fila-desglose-totales">
+            <section class="desglose-factura flex-grow-1 ${desglose.length > 0 ? '' : 'd-none'}">
+                <h2 class="h6">Desglose del IVA</h2>
+                <table class="table table-sm tabla-desglose">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="text-end">Base imponible</th>
+                            <th scope="col" class="text-end">Tipo</th>
+                            <th scope="col" class="text-end">Cuota</th>
+                        </tr>
+                    </thead>
+                    <tbody>${desgloseHtml}</tbody>
+                </table>
+            </section>
+            <div class="totales-factura flex-shrink-0">
+                <div><span>Subtotal</span><strong>${escaparHtml(formatearImporte(f.subtotal))}</strong></div>
+                <div><span>IVA</span><strong>${escaparHtml(formatearImporte(f.importeIva))}</strong></div>
+                <div class="total-final"><span>Total</span><strong>${escaparHtml(formatearImporte(f.total))}</strong></div>
+            </div>
+        </div>
+
+        ${f.observaciones && f.observaciones.trim() ? `
+        <section class="observaciones-factura">
+            <h2 class="h5">Observaciones</h2>
+            <p class="mb-0">${escaparHtml(f.observaciones)}</p>
+        </section>` : ''}
+    `;
+}
+
+/**
+ * Crea un <div> con la misma estructura que el visor pero con los datos
+ * de una factura concreta, listo para imprimir.
+ *
+ * @param {object} detalle factura, cliente, conceptos y desglose
+ * @param {object} emisor  datos del emisor
+ * @return {HTMLElement} la hoja clonada
+ */
+function crearClonParaImpresion(detalle, emisor) {
+    const contenedor = document.createElement("div");
+    contenedor.className = "documento-factura factura-lote";
+    // El clon hereda el formato de hoja que haya elegido el selector.
+    contenedor.classList.toggle("hoja-estrecha",
+            documentoFactura.classList.contains("hoja-estrecha"));
+    contenedor.innerHTML = construirHtmlFactura(detalle, emisor);
+    return contenedor;
+}
+
+/**
+ * Pide el detalle de cada factura de la cola y devuelve los que hayan llegado.
+ *
+ * Las que fallen se descartan en silencio en vez de abortar el lote: con diez
+ * facturas seleccionadas, que una dé error no es razón para no imprimir las
+ * otras nueve.
+ *
+ * @return {Promise<Array<object>>}
+ */
+async function pedirDetallesDeLaCola() {
+    const peticiones = Array.from(colaImpresion.keys(), async id => {
+        const respuesta = await fetch("/factura/" + id + "/detalle");
+        return respuesta.ok ? respuesta.json() : null;
+    });
+
+    const resultados = await Promise.allSettled(peticiones);
+    return resultados
+        .filter(resultado => resultado.status === "fulfilled" && resultado.value !== null)
+        .map(resultado => resultado.value);
+}
+
+/**
+ * Esconde el borrador, imprime los clones y devuelve la pantalla a su estado.
+ *
+ * El borrador se esconde ENTERO: la hoja principal y también las hojas que el
+ * paginador le haya creado. Antes solo se ocultaba la principal, así que un
+ * borrador de varias páginas colaba sus hojas extra delante de los clones.
+ *
+ * La sidebar recupera el estado que tenía y no uno fijo: antes se la mostraba
+ * siempre al terminar, incluso si estaba oculta al empezar.
+ *
+ * @param {Array<object>} detalles facturas a imprimir, en orden de cola
+ * @param {object} emisor datos del emisor
+ */
+async function imprimirClones(detalles, emisor) {
+    const hojasBorrador = [documentoFactura, ...hojasExtra()];
+    const sidebarEstabaOculta = sidebarCola.classList.contains("d-none");
+    const clones = detalles.map(detalle => crearClonParaImpresion(detalle, emisor));
+
+    hojasBorrador.forEach(hoja => hoja.classList.add("d-none"));
+    sidebarCola.classList.add("d-none");
+    document.body.append(...clones);
+
+    try {
+        // Un fotograma para que el navegador maquete los clones antes de medirlos.
+        await new Promise(requestAnimationFrame);
+        window.print();
+    } finally {
+        clones.forEach(clon => clon.remove());
+        hojasBorrador.forEach(hoja => hoja.classList.remove("d-none"));
+        sidebarCola.classList.toggle("d-none", sidebarEstabaOculta);
+        // El borrador vuelve a estar a la vista: se recalculan sus cortes.
+        programarPaginar();
+    }
+}
+
+/**
+ * Imprime de una vez todas las facturas de la cola.
+ *
+ * El try/finally es lo que garantiza que el botón se recupere: sin él, un error
+ * de red a mitad de la carga dejaba el botón deshabilitado y con el spinner
+ * puesto para siempre.
+ */
+async function imprimirEnLote() {
+    const textoOriginal = botonImprimirTodas.innerHTML;
+    botonImprimirTodas.disabled = true;
+    botonImprimirTodas.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparando…';
+
+    try {
+        // El emisor se espera: es el mismo para todas y sin él los clones
+        // saldrían con los datos de la empresa a "—".
+        const [detalles, emisor] = await Promise.all([
+            pedirDetallesDeLaCola(),
+            emisorCargado,
+        ]);
+
+        if (detalles.length === 0) {
+            fijar("No se pudieron cargar los datos para imprimir.", { esError: true });
+            return;
+        }
+
+        await imprimirClones(detalles, emisor ?? {});
+    } catch (error) {
+        console.error("Error al preparar la impresión en lote", error);
+        fijar("No se pudieron cargar los datos para imprimir.", { esError: true });
+    } finally {
+        botonImprimirTodas.innerHTML = textoOriginal;
+        botonImprimirTodas.disabled = false;
+    }
+}
+
+botonImprimirTodas.addEventListener("click", imprimirEnLote);

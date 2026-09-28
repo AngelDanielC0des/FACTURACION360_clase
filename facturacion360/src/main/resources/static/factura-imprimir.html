@@ -45,6 +45,10 @@
                 </select>
             </div>
 
+            <button id="botonSeleccionarVarias" type="button" class="btn btn-outline-secondary">
+                <i class="bi bi-collection"></i> Seleccionar varias
+            </button>
+
             <button id="botonImprimir" type="button" class="btn btn-primary" disabled>
                 <i class="bi bi-printer"></i> Imprimir / Guardar PDF
             </button>
@@ -70,11 +74,12 @@
             -->
             <p id="marcaAgua" class="marca-agua d-none" aria-hidden="true">BORRADOR</p>
 
-            <header class="cabecera-factura d-flex justify-content-between align-items-start gap-4">
+            <header class="cabecera-factura d-flex justify-content-between align-items-start">
                 <div class="d-flex align-items-center gap-3">
+                    <!-- Sin style= de medidas: el alto y el ancho máximo del logo salen de la
+                         escala de densidad del CSS, que es la que el A5 reduce. -->
                     <img id="logoEmisor" src="/emisor/logo" alt="Logo emisor"
                          class="logo-emisor"
-                         style="height: 100px; width: auto; max-height: 100px;"
                          onerror="this.style.display='none'">
                     <div>
                         <h1 id="nombreEmisorCabecera" class="h4 mb-0 text-primary">Facturación 360</h1>
@@ -82,23 +87,33 @@
                     </div>
                 </div>
 
-                <div class="d-flex align-items-start gap-4 ms-auto">
-                    <div class="text-end">
+                <div class="cabecera-identificacion d-flex align-items-start ms-auto">
+                    <!-- La alineación a la derecha la da .datos-identificacion en el CSS y no
+                         la utilidad .text-end: esa viene con !important y el A5, que pone este
+                         bloque a la izquierda, tenía que anularla con otro !important. -->
+                    <div class="datos-identificacion">
                         <h2 id="numeroFactura" class="h5 mb-1"></h2>
                         <p id="fechaFactura" class="mb-0 small"></p>
                         <p id="estadoFactura" class="mb-0 small text-muted"></p>
                     </div>
 
                     <!--
-                        Bloque QR · Orden HAC/1177/2024, art. único, apdo. 3.
+                        Bloque QR · Orden HAC/1177/2024, arts. 20 y 21.
                         Requisitos de impresión:
-                          - Norma ISO/IEC 18004:2015, nivel de corrección M.
-                          - Tamaño: entre 30×30 mm y 40×40 mm.
-                          - Zona de silencio: ≥ 2 mm (se usan 6 mm recomendados).
+                          - Norma ISO/IEC 18004, nivel de corrección M.
+                          - Tamaño: entre 30×30 mm y 40×40 mm. Se usan 35 mm en A4 y Carta y
+                            30 mm en A5, que es el mínimo legal: el QR es lo único que no se
+                            encoge con la densidad de la hoja.
+                          - Zona de silencio: ≥ 2 mm (6 mm recomendados en A4, 2 mm en A5).
                           - Texto encima: «QR tributario:» (distingue este QR del de pago).
                           - Texto debajo: «VERI*FACTU» con subtexto explicativo.
-                          - Ambos textos con tamaño ≥ al cuerpo de la factura (≥ 9pt).
-                          - Posición: arriba, margen superior derecho.
+                          - Ambos textos a 9pt en todos los formatos: el art. 20 los pide con
+                            tamaño «similar al resto de datos de la factura».
+                          - Posición: la AEAT publica «arriba, próximo al margen superior,
+                            preferiblemente centrado». Aquí va arriba a la derecha: cumple la
+                            parte exigida y el centrado es preferencia, no requisito. Centrarlo
+                            impediría compartir fila con el número de factura, que es lo que
+                            permite que el A5 quepa en un folio.
                         Solo se muestra si la factura está emitida. El JS oculta este bloque
                         para borradores y el backend devuelve 404 si se pide el PNG directamente.
                     -->
@@ -118,7 +133,7 @@
                 </div>
             </header>
 
-<div class="datos-partes mb-4">
+<div class="datos-partes">
     <div class="row">
         <div class="col-6 border-end">
             <section aria-labelledby="tituloEmisor">
@@ -166,7 +181,7 @@
                  de IVA por si solo no deja comprobar nada. Es ademas el Desglose que exige la
                  AEAT en el registro de Verifactu, asi que lo que se imprime y lo que se
                  declara salen del mismo sitio. -->
-            <div class="d-flex justify-content-between align-items-start mt-4 mb-4 gap-4 flex-wrap flex-sm-nowrap fila-desglose-totales">
+            <div class="d-flex justify-content-between align-items-start flex-wrap fila-desglose-totales">
                 <section id="bloqueDesglose" class="desglose-factura flex-grow-1 d-none" aria-labelledby="tituloDesglose">
                     <h2 id="tituloDesglose" class="h6">Desglose del IVA</h2>
                     <table class="table table-sm tabla-desglose">
@@ -181,7 +196,7 @@
                     </table>
                 </section>
 
-                <div class="totales-factura flex-shrink-0" style="width: 320px; max-width: 100%;">
+                <div class="totales-factura flex-shrink-0">
                     <div><span>Subtotal</span><strong id="subtotalFactura"></strong></div>
                     <div><span>IVA</span><strong id="ivaFactura"></strong></div>
                     <div class="total-final"><span>Total</span><strong id="totalFactura"></strong></div>
@@ -194,5 +209,69 @@
             </section>
         </div>
     </main>
+
+    <!--
+        Panel de selección múltiple de facturas. Se desliza desde la izquierda
+        cubriendo la vista sin moverla: la paginación del borrador no se toca.
+        El CSS lo posiciona con position:fixed y transform:translateX(-100%).
+    -->
+    <aside id="panelBuscador" class="panel-buscador" aria-hidden="true">
+        <div class="panel-buscador-contenido">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="h5 mb-0">Seleccionar facturas</h2>
+                <button id="botonCerrarPanel" type="button"
+                        class="btn-close" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="d-flex gap-2 mb-3">
+                <input id="campoBusquedaFacturas" type="search"
+                       class="form-control" placeholder="Buscar por número o cliente…"
+                       autocomplete="off">
+                <select id="filtroEstado" class="form-select" style="width: auto;">
+                    <option value="">Todos los estados</option>
+                    <option value="BORRADOR" selected>Borrador</option>
+                    <option value="EMITIDA">Emitida</option>
+                    <option value="ANULADA">Anulada</option>
+                </select>
+            </div>
+
+            <p id="contadorResultados" class="small text-muted mb-2"></p>
+
+            <div id="listaResultados" class="lista-resultados"></div>
+
+            <div class="mt-3 d-flex justify-content-end">
+                <button id="botonAgregarSeleccion" type="button"
+                        class="btn btn-primary" disabled>
+                    <i class="bi bi-plus-lg"></i> Añadir a la cola de impresión
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!--
+        Sidebar con las facturas seleccionadas para imprimir en lote.
+        Se despliega a la derecha del visor, empujándolo ligeramente.
+        Cada tarjeta muestra número, cliente e importe total; al hacer
+        clic carga esa factura en la vista principal para previsualizarla.
+    -->
+    <aside id="sidebarCola" class="sidebar-cola d-none" aria-label="Cola de impresión">
+        <div class="sidebar-cola-cabecera d-flex justify-content-between align-items-center">
+            <h3 class="h6 mb-0">
+                Cola de impresión
+                <span id="contadorCola" class="badge bg-primary ms-1">0</span>
+            </h3>
+            <button id="botonLimpiarCola" type="button"
+                    class="btn btn-sm btn-outline-danger" title="Vaciar cola">
+                <i class="bi bi-trash3"></i> Vaciar
+            </button>
+        </div>
+
+        <div id="listaCola" class="lista-cola"></div>
+
+        <button id="botonImprimirTodas" type="button"
+                class="btn btn-primary w-100 mt-auto" disabled>
+            <i class="bi bi-printer"></i> Imprimir todas
+        </button>
+    </aside>
 </body>
 </html>
