@@ -108,6 +108,26 @@
 			<artifactId>spring-boot-starter-jdbc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Herramientas de minificación: disponibles durante el build,
+     excluidas del JAR de la aplicación por su alcance test. -->
+		<dependency>
+			<groupId>com.github.hazendaz</groupId>
+			<artifactId>htmlcompressor</artifactId>
+			<version>2.4.1</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.helger</groupId>
+			<artifactId>ph-css</artifactId>
+			<version>8.2.1</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.google.javascript</groupId>
+			<artifactId>closure-compiler</artifactId>
+			<version>v20260915</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -139,5 +159,35 @@
 			</plugin>
 		</plugins>
 	</build>
-
+	<profiles>
+		<profile>
+			<id>produccion</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<version>3.6.4</version>
+						<executions>
+							<execution>
+								<id>minificar-static</id>
+								<phase>prepare-package</phase>
+								<goals>
+									<goal>java</goal>
+								</goals>
+								<configuration>
+									<mainClass>buildtools.MinificarStatic</mainClass>
+									<classpathScope>test</classpathScope>
+									<arguments>
+										<argument>
+											${project.build.outputDirectory}/static</argument>
+									</arguments>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
