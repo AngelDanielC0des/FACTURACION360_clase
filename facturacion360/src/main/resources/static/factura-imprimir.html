@@ -28,9 +28,10 @@
 
             <!--
                 Selector de formato de papel. La opción "Por defecto" deja el @page sin "size:",
-                lo que respeta el papel configurado por el usuario en el diálogo de impresión.
-                Las demás opciones inyectan @page { size: X } mediante JS para que el navegador
-                ajuste la previsualización antes de abrir el diálogo.
+                lo que respeta el papel configurado por el usuario en el diálogo de impresión
+                (el borrador se queda como referencia en A4). Las demás opciones inyectan
+                @page { size: X } mediante JS y redimensionan la hoja del borrador para que
+                la vista en pantalla coincida con lo que se imprimirá.
             -->
             <div class="d-flex align-items-center gap-2">
                 <label for="selectFormatoPapel" class="form-label mb-0 small text-muted text-nowrap">
@@ -50,7 +51,7 @@
         </div>
     </div>
 
-    <main id="documentoFactura" class="documento-factura container mb-5" aria-busy="true">
+   <main id="documentoFactura" class="documento-factura" aria-busy="true">
         <!-- La región viva que lee el lector de pantalla: el visor no tenía ninguna, así que
              quien no ve la pantalla no se enteraba ni de que la factura había fallado. -->
         <p id="anuncios" class="visually-hidden" role="status"></p>
@@ -140,7 +141,7 @@
     </div>
 </div>
 
-            <section aria-labelledby="tituloConceptos">
+            <section id="bloqueConceptos" aria-labelledby="tituloConceptos">
                 <h2 id="tituloConceptos" class="h5">Conceptos</h2>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle">
@@ -165,7 +166,7 @@
                  de IVA por si solo no deja comprobar nada. Es ademas el Desglose que exige la
                  AEAT en el registro de Verifactu, asi que lo que se imprime y lo que se
                  declara salen del mismo sitio. -->
-            <div class="d-flex justify-content-between align-items-start mt-4 mb-4 gap-4 flex-wrap flex-sm-nowrap">
+            <div class="d-flex justify-content-between align-items-start mt-4 mb-4 gap-4 flex-wrap flex-sm-nowrap fila-desglose-totales">
                 <section id="bloqueDesglose" class="desglose-factura flex-grow-1 d-none" aria-labelledby="tituloDesglose">
                     <h2 id="tituloDesglose" class="h6">Desglose del IVA</h2>
                     <table class="table table-sm tabla-desglose">

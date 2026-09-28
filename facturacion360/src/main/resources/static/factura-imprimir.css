@@ -1,13 +1,21 @@
 body {
-    background-color: #f1f5f9;
+    background-color: white;       /* ANTES era #f1f5f9; ahora coincide con print */
     color: #1f2937;
+    margin: 0;
 }
 
+
 .documento-factura {
-    max-width: 960px;
-    background-color: white;
-    padding: 2.5rem;
+    /* Hoja del borrador. La variable la cambia el selector de formato
+       (A4/A5/Carta) desde el JS; el fallback deja A4 antes de que corra. */
+    width: var(--hoja-ancho, 210mm);
+    min-height: var(--hoja-alto, 297mm);
+    max-width: 100%;
+    margin: 2rem auto;             /* Centrado horizontal, espacio arriba */
+    padding: 14mm;
+    background-color: transparent; /* ANTES era white; ahora coincide con print */
     box-shadow: 0 4px 18px rgba(15, 23, 42, 0.12);
+    font-size: 11pt;
 }
 
 .cabecera-factura {
@@ -15,6 +23,8 @@ body {
     padding-bottom: 1.5rem;
     margin-bottom: 2rem;
 }
+
+
 
 .cabecera-factura h1 {
     color: #024ebc;
@@ -25,15 +35,23 @@ body {
 .bloque-verifactu {
     text-align: center;
     margin: 0;
-    padding: 16px;
+    /* El mismo aire que da la impresión: la caja del QR tiene que medir lo
+       mismo en el borrador que en el papel, o los cortes de página no caen
+       en el mismo sitio. */
+    padding: 6mm;
     background: #fff;
-    border: 1px dashed #ced5db;
+    /* outline en vez de border: da el recuadro punteado de delimitación en
+       pantalla sin ocupar sitio en el layout (border sí lo ocuparía y dejaría
+       la caja 2px más alta que la impresa). En impresión se anula. */
+    outline: 1px dashed #ced5db;
 }
 
 .qr-verifactu {
     display: block;
-    width: 132px;
-    height: 132px;
+    /* 35mm: la medida que exige la Orden HAC/1177/2024 y que ya usaba la
+       impresión; en pantalla el mismo valor, para que todo pese igual. */
+    width: 35mm;
+    height: 35mm;
     margin: 0 auto;
 }
 
@@ -58,9 +76,16 @@ body {
 .leyenda-verifactu small {
     display: block;
     font-weight: 400;
-    font-size: 0.65rem;
+    /* 7pt: el cuerpo con que sale impresa (la leyenda del QR pide un tamaño
+       mayor o igual que el de la factura). */
+    font-size: 7pt;
     color: #555;
     margin-top: 2px;
+}
+
+.logo-emisor {
+    /* Igual que la impresión: dentro de la cabecera el logo no se encoge. */
+    flex-shrink: 0;
 }
 
 /* Marca de agua BORRADOR */
@@ -117,6 +142,13 @@ body {
     color: #024ebc;
 }
 
+/* El cuerpo con que se imprimen los conceptos, en todos los formatos. El
+   borrador usa el mismo para que la tabla pese idéntica en pantalla y en
+   papel: si no, los cortes de página no saldrían en el mismo sitio. */
+.table-responsive table {
+    font-size: 9pt;
+}
+
 .tabla-desglose {
     margin-bottom: 0;
 }
@@ -140,6 +172,51 @@ body {
     }
 }
 
+/*
+ * Hoja estrecha (A5). En impresión las reglas de arriba ya las aplica el
+ * @media contra el ancho del papel, pero en pantalla el viewport sigue
+ * siendo ancho y no se activan: cabecera y totales se salían de la hoja y
+ * la tabla de conceptos quedaba con scroll. Aquí se replican contra la
+ * clase que pone el selector de formato para que el borrador de A5 tenga
+ * exactamente la misma maquetación que la salida impresa de A5.
+ */
+.hoja-estrecha .cabecera-factura {
+    flex-direction: column;
+}
+
+.hoja-estrecha .cabecera-factura .text-end {
+    text-align: left !important;
+}
+
+.hoja-estrecha .totales-factura,
+.hoja-estrecha .desglose-factura {
+    width: 100%;
+}
+
+/* Anula flex-sm-nowrap (que mira el viewport y ya viene con !important)
+   cuando la hoja es estrecha: sin esto la fila desglose+totales no se
+   parte y los importes se salían por la derecha. */
+.hoja-estrecha .fila-desglose-totales {
+    flex-wrap: wrap !important;
+}
+
+/* Etiqueta de página de las hojas extra del borrador. Absoluta: no suma
+   alto, así no altera la medición de la paginación. */
+.documento-factura.hoja-extra {
+    position: relative;
+}
+
+.documento-factura.hoja-extra::before {
+    content: "Página " attr(data-pagina);
+    position: absolute;
+    top: -1.6rem;
+    left: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+
 @media print {
     @page {
         /* sin "size:": respeta el papel elegido en el diálogo de impresión.
@@ -149,28 +226,41 @@ body {
 
     body {
         background-color: white;
-        font-size: 11pt;
     }
 
     .acciones-visor {
         display: none !important;
     }
 
+    /* El borrador ya viene paginado con los mismos cortes que el papel:
+       cada hoja arranca en una página nueva. Con una sola hoja esta regla
+       no matchea y la salida es exactamente la de siempre. */
+    .documento-factura + .documento-factura {
+        break-before: page;
+    }
+
+    /* La etiqueta "Página N" es solo de pantalla. */
+    .documento-factura.hoja-extra::before {
+        display: none;
+    }
+
     .documento-factura {
-        max-width: none;
-        margin: 0 !important;
+        /* El papel ya pone el tamaño: sin min-height ni padding aquí,
+           el área imprimible (hoja - 28mm de @page) y el borrador de
+           pantalla (hoja - 28mm de padding) quedan idénticos. */
+        margin: 0;
+        min-height: 0;
         padding: 0;
         box-shadow: none;
+        background-color: transparent;
     }
 
     .table-responsive {
         overflow: visible;
     }
 
-    /* Ajusta el texto de los conceptos para que no colapse en papel A4 */
-    .table-responsive table {
-        font-size: 9pt;
-    }
+    /* El cuerpo de la tabla (9pt) vive en la regla base, fuera de este
+       bloque: así el borrador mide lo mismo que la impresión. */
 
     /* Alinea verticalmente los importes monetarios igualando el ancho de los números */
     .table-responsive td.text-end,
@@ -181,26 +271,26 @@ body {
     tr {
         break-inside: avoid;
     }
-    .logo-emisor {
-    height: 100px !important;
-    max-height: 100px !important;
-    max-width: 150px !important;
-    width: auto !important;
-    object-fit: contain;
-    flex-shrink: 0;
-}
 
-.datos-partes,
-.datos-cliente,
-.observaciones-factura {
-    border: 1px solid #cbd5e1;
-    border-radius: 0.5rem;
-    padding: 1rem;
-}
+    .logo-emisor {
+        height: 100px !important;
+        max-height: 100px !important;
+        max-width: 150px !important;
+        width: auto !important;
+        object-fit: contain;
+        flex-shrink: 0;
+    }
+
+    .observaciones-factura {
+        border: 1px solid #cbd5e1;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
 
     .bloque-verifactu {
-        padding: 6mm;
-        border: none;
+        /* padding 6mm ya viene de la regla base; aquí solo se quita el
+           recuadro punteado de pantalla, que no se imprime. */
+        outline: none;
         break-inside: avoid;
     }
 
@@ -221,4 +311,12 @@ body {
     .marca-agua {
         color: rgba(200, 0, 0, 0.08);
     }
+}
+
+.datos-partes,
+.datos-cliente,
+.observaciones-factura {
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    padding: 1rem;
 }
