@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Despertar la aplicación
-        run: ./.github/scripts/calentar.sh "$BASE_URL"
+        run: bash .github/scripts/calentar.sh "$BASE_URL"
 
       - uses: grafana/setup-k6-action@v1
 
