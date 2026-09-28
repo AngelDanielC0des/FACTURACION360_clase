@@ -39,24 +39,41 @@
 	</div>
 
 	<nav class="navbar">
-		<div class="container">
-			<a class="navbar-brand" href="index.html"> <img
-				src="./img/finanzas.png" alt="Logo de Facturación 360"
-				class="logo me-2"> Facturación 360
-			</a>
+    <div class="container">
 
-			<ul class="navbar-nav">
-				<li><a class="nav-link" href="index.html">Inicio</a></li>
-				<li><a class="nav-link" href="perfil.html">Datos Emisor</a></li>
-      <li><a class="nav-link active" href="clientes.html">Clientes</a></li>
-      	<!-- aria-current="page" es lo que hace que un lector de pantalla diga "página actual".
-           La clase 'active' solo pinta; no significa nada para quien no ve la pantalla. -->
-      <li><a class="nav-link" href="facturas.html">Facturas</a></li>
-      <li><a class="nav-link " href="nosotros.html">Sobre Nosotros</a></li>
-			</ul>
+        <a class="navbar-brand" href="index.html">
+            <img src="./img/finanzas.png"
+                 alt="Logo de Facturación 360"
+                 class="logo">
+            Facturación 360
+        </a>
 
-		</div>
-	</nav>
+        <input type="checkbox" id="menu-toggle" class="menu-toggle">
+
+        <label for="menu-toggle" class="menu-button" aria-label="Abrir menú">
+            <i class="fa-solid fa-bars"></i>
+        </label>
+
+        <ul class="navbar-nav">
+            <li>
+                <a class="nav-link " href="index.html">Inicio</a>
+            </li>
+            <li>
+                <a class="nav-link" href="perfil.html">Datos Emisor</a>
+            </li>
+            <li>
+                <a class="nav-link active" href="clientes.html">Clientes</a>
+            </li>
+            <li>
+                <a class="nav-link" href="facturas.html">Facturas</a>
+            </li>
+            <li>
+                <a class="nav-link" href="nosotros.html">Sobre Nosotros</a>
+            </li>
+        </ul>
+
+    </div>
+</nav>
 
 	<main class="container py-5">
 		<div class="d-flex justify-content-between align-items-center mb-4">

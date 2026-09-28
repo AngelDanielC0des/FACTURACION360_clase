@@ -11,8 +11,8 @@
    Lo suyo sería quedarse solo con el <link>: un @import obliga al navegador a descargar y
    analizar esta hoja ANTES de poder pedir la fuente, así que retrasa el primer pintado,
    mientras que un <link> del <head> se descarga en paralelo. Se deja porque hacerlo bien
-   pasa por añadir el 500 al <link> de index.html y de facturas.html, que son páginas de
-   otras features, y no compensa tocarlas por esto.
+   pasa por añadir el 500 al <link> de index.html y de facturas.html, que son páginas
+   de otras features, y no compensa tocarlas por esto.
 
    Cuando alguien esté ya editando esas dos páginas: añadir 500 a los tres <link> y borrar
    este @import. Cuatro líneas y queda una sola petición, más rápida. */
@@ -23,28 +23,8 @@
     --bg-body: #f8fafc;
     --text-main: #1f2937;
     --white: #ffffff;
-    --focus-ring: #f59e0b; /* Contraste alto para accesibilidad */
+    --focus-ring: #f59e0b;
 
-    /* Colores de estado de la fila desplegada. Son DOS JUEGOS y no uno, y el motivo es que
-       el borde y el texto no piden lo mismo.
-
-       El BORDE solo transmite estado: el criterio 1.4.11 de WCAG le pide 3:1, y con eso
-       puede ir vivo. El TEXTO del cartel ("Viendo detalles de…", "Editando…") necesita
-       4.5:1 (criterio 1.4.3), que es bastante más, y por eso va en tonos oscuros.
-
-       Cuando los dos papeles compartían color mandaba el más exigente y los bordes salían
-       apagados. Separándolos, el borde se lleva el tono neón y el cartel conserva el
-       contraste. Si algún día se vuelven a fundir en una sola variable, el que se rompe es
-       el texto, no el borde.
-
-       Los del texto, medidos sobre --fila-abierta (#dbe6ff), que es el fondo del panel
-       abierto: el morado da 6.91:1, el verde 4.69:1 y el ámbar 5.66:1. De referencia de lo
-       justo que va esto: el ámbar anterior (#b45309) se quedaba en 4.35:1, o sea que valía
-       como borde pero NO como texto.
-
-       OJO al medir: durante un tiempo estas cuentas se hicieron contra #e7efff, que fue el
-       valor de --fila-abierta hasta que los tres tonos de fila se reajustaron. El fondo bueno
-       es el de la variable, no un número escrito a mano que se queda viejo en silencio. */
     --borde-detalle: #a855f7;
     --borde-edicion: #fb923c;
     --borde-alta: #22c55e;
@@ -55,22 +35,10 @@
     --estado-alta: #157347;
     --estado-borrado: #b91c1c;
 
-    /* Los tres tonos de fila de la tabla. Van JUNTOS y aquí a propósito: son una escala, y el
-       valor de cada uno solo tiene sentido mirando los otros dos. Estuvieron repartidos por
-       la hoja y pasó lo previsible: se bajó el rayado por su cuenta "para que el resaltado de
-       la fila abierta se siguiera distinguiendo", y el resultado fue apretar los tres en un
-       15 % de luminancia, con lo que ni el rayado ni el resaltado llegaban a verse. Abrir una
-       fila PAR apenas le cambiaba el fondo.
-
-       Los saltos son de 1,11 · 1,13 · 1,12 respecto al anterior. De referencia: el rayado que
-       trae Bootstrap de serie ronda 1,12, así que esto no es más marcado de lo normal.
-       Si hay que retocarlos, se mueven LOS TRES para no volver a juntarlos. */
     --fila-rayada: #eef3ff;
     --fila-abierta: #dbe6ff;
     --fila-abierta-hover: #c9daff;
 
-    /* Alto común de la barra de filtros: el buscador y los desplegables tienen que medir
-       lo mismo o la fila se ve escalonada. */
     --alto-control: 40px;
     --borde-suave: #cbd5e1;
     --radio-tabla: 0.75rem;
@@ -84,114 +52,186 @@ body {
     margin: 0;
 }
 
+
 /* ==========================================
-   NAVEGACIÓN (Actualizada para alineación)
+   NAVEGACIÓN
    ========================================== */
-/* Asegurar que la barra de navegación tenga el color adecuado */
+
 .navbar {
-    background-color: #024ebc; /* Un tono azul oscuro elegante */
-    padding: 0.75rem 0;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background: #154ed4;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 12px 0;
+    position: relative;
+    z-index: 1000;
 }
 
-/* El contenedor interno de tu barra: ¡Aquí es donde achicamos el ancho! */
-.navbar .container, 
-.navbar .container-fluid {
+.navbar .container {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    max-width: 1140px;      /* Modifica este número (ej. 1000px) si lo quieres aún más estrecho */
-    margin: 0 auto;         /* Centra el contenedor */
-    padding-left: 1.5rem;   /* Margen interno para que no pegue al borde en móviles */
-    padding-right: 1.5rem;
 }
 
-/* Estilo para el logo y texto juntos a la izquierda */
+
+/* LOGO */
+
 .navbar-brand {
-    font-weight: 700;       /* Corregido: 700 en lugar de 100% */
-    font-size: 1.5rem;
-    letter-spacing: -0.5px;
-    color: #ffffff !important;
     display: flex;
     align-items: center;
-    text-decoration: none; /* Quita el subrayado si es un enlace */
+    gap: 10px;
+
+    color: #ffffff;
+    font-size: 1.25rem;
+    font-weight: 700;
+    text-decoration: none;
+
+    white-space: nowrap;
 }
 
-/* Control del tamaño de la imagen del logo */
-.navbar-brand .logo {
-    height: 60px; /* Ajusta la altura según lo necesites */
-    width: auto;
+.navbar-brand:hover {
+    color: #ffffff;
+}
+
+.logo {
+    width: 42px;
+    height: 42px;
     object-fit: contain;
 }
 
-/* Forzar a que el menú de enlaces se vaya completamente a la derecha sin márgenes */
+
+/* MENÚ ESCRITORIO */
+
 .navbar-nav {
-    margin: 0; 
     display: flex;
-    flex-direction: row;
     align-items: center;
+    gap: 5px;
+
     list-style: none;
-    padding-left: 0;
+    margin: 0;
+    padding: 0;
 }
 
-/* Estilo para los enlaces de navegación */
-.navbar-nav .nav-link {
-    color: #cbd5e1 !important; /* Gris claro */
-    font-weight: 500;
-    padding: 0.5rem 1rem !important;
-    transition: color 0.3s ease;
+.nav-link {
+    display: block;
+
+    color: #ffffff;
+    text-decoration: none;
+
+    font-size: 0.95rem;
+    font-weight: 600;
+
+    padding: 10px 13px;
+    border-radius: 8px;
+
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease;
 }
 
-/* Efecto al pasar el ratón */
-.navbar-nav .nav-link:hover, 
-.navbar-nav .nav-link.active {
-    color: #ffffff !important; /* Blanco al estar activo o pasar el ratón */
+.nav-link:hover {
+    color: #1e4bb8;
+    background: #94b3ff;
+
 }
+
+.nav-link.active {
+    color: #ffffff;
+    background: #94b3ff;
+}
+
+.nav-link.active:hover {
+    color: #ffffff;
+    background: #94b3ff;
+}
+
+
+/* ==========================================
+   MENÚ HAMBURGUESA
+   CSS PURO - SIN JAVASCRIPT
+   ========================================== */
+
+/* Checkbox invisible que controla el menú */
+
+.menu-toggle {
+    display: none;
+}
+
+
+/* Botón hamburguesa */
+
+.menu-button {
+    display: none;
+
+    width: 44px;
+    height: 44px;
+
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid #dbe2ea;
+    border-radius: 8px;
+
+    background: #ffffff;
+    color: #1e4bb8;
+
+    font-size: 1.25rem;
+    cursor: pointer;
+}
+
+.menu-button:hover {
+    background: #f1f5ff;
+}
+
 
 /* ==========================================
    COMPONENTES Y TARJETAS
    ========================================== */
 
 /* Contenedor que centra el recuadro */
+
 .main-wrapper {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 70vh; /* Ajusta la altura según lo necesites */
+    min-height: 70vh;
 }
+
 
 /* El recuadro blanco de la imagen */
+
 .feature-card {
-    background: #f9f9f9; /* El fondo gris muy claro de la imagen */
-    border-radius: 8px;  /* Esquinas ligeramente redondeadas */
-    padding: 4rem 3rem;  /* Mucho espacio interno */
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 4rem 3rem;
     text-align: center;
     border: none;
-    box-shadow: none;    /* Sin sombra, estilo plano como en tu imagen */
+    box-shadow: none;
     width: 100%;
-    max-width: 600px;    /* Limita el ancho para que no se estire demasiado */
+    max-width: 600px;
 }
 
+
 /* Estilos específicos para el texto */
+
 .feature-card h3 {
-    color: #0d6efd;      /* El color azul que se ve en la imagen */
+    color: #0d6efd;
     margin-bottom: 1rem;
     font-weight: 600;
 }
 
 .feature-card p {
-    color: #6c757d;      /* El color gris del subtítulo */
+    color: #6c757d;
     font-size: 1.1rem;
 }
 
+
 /* Botones */
+
 .btn-primary-custom {
     background-color: var(--secondary-color);
     color: var(--white);
-    padding: 0.8rem 2rem;
-    border-radius: 8px;
-    font-weight: 600;
+    padding: 0.1rem 1rem;
+    border-radius: 4px;
+    font-weight: 200;
     text-decoration: none;
     transition: background 0.3s ease;
 }
@@ -201,23 +241,29 @@ body {
     color: var(--white);
 }
 
+
 /* ==========================================
    ACCESIBILIDAD Y TABLAS
    ========================================== */
 
 /* Accesibilidad: Indicador de foco */
+
 :focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
 }
 
+
 /* Color azul para la cabecera de la tabla */
+
 .table thead.table-primary-custom {
-    background-color: #0d6efd; /* El azul de tu imagen */
+    background-color: #0d6efd;
     color: white;
 }
 
+
 /* Espaciado para los iconos de acción */
+
 .table td .btn {
     padding: 0.25rem 0.5rem;
     font-size: 1rem;
@@ -228,7 +274,9 @@ body {
     font-size: 0.85rem;
 }
 
-/* Botón de Editar (Primario) */
+
+/* Botón de Editar */
+
 .btn-primary-custom-table {
     color: var(--primary-color);
     transition: all 0.3s ease;
@@ -239,9 +287,11 @@ body {
     background-color: transparent;
 }
 
-/* Botón de Eliminar (Danger) */
+
+/* Botón de Eliminar */
+
 .btn-outline-danger {
-    border: none; /* Quitamos el borde para que quede más limpio en la tabla */
+    border: none;
     color: #ef4444;
     background-color: transparent;
     transition: all 0.3s ease;
@@ -253,14 +303,22 @@ body {
     border-radius: 4px;
 }
 
+
 /* Reset básico para accesibilidad */
-img { max-width: 100%; height: auto; }
+
+img {
+    max-width: 100%;
+    height: auto;
+}
 
 
 /* ==========================================
-   ESTRUCTURA DE LA PÁGINA (Footer fijo)
+   ESTRUCTURA DE LA PÁGINA
+   Footer fijo
    ========================================== */
-html, body {
+
+html,
+body {
     height: 100%;
     margin: 0;
 }
@@ -271,19 +329,18 @@ body {
 }
 
 main {
-    flex: 1; /* Hace que el contenido ocupe el espacio disponible y empuje el footer */
+    flex: 1;
 }
 
 footer {
-    flex-shrink: 0; /* Asegura que el footer no se comprima */
+    flex-shrink: 0;
 }
 
+
 /* ==========================================
-   BARRA DE FILTROS (buscador + filtros + ordenación)
+   BARRA DE FILTROS
    ========================================== */
 
-/* Una sola fila flexible. Con flex-wrap, en pantallas estrechas los controles se
-   apilan solos y no hace falta una media query aparte para colocarlos. */
 .barra-filtros {
     display: flex;
     flex-wrap: wrap;
@@ -291,27 +348,25 @@ footer {
     gap: 0.5rem;
 }
 
-/* Dentro de la barra el ancho lo negocia el flex, así que aquí manda flex-basis y no width;
-   por eso la transición se pone sobre él, o abrirse sería un salto en vez de un crecimiento.
-   El shrink a 1 es lo que evita que la barra se parta en dos líneas: sumando los tres
-   desplegables y los botones, el buscador abierto no cabe en un escritorio de 1140px, y sin
-   poder encogerse mandaría el botón de limpiar a la línea de abajo. El suelo de
-   --ancho-cerrado impide que ese encogimiento llegue a dejarlo más pequeño que cerrado. */
+
+/* Buscador */
+
 .barra-filtros .buscador-clientes {
     flex: 0 1 var(--ancho-cerrado);
     min-width: var(--ancho-cerrado);
-    transition: flex-basis 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+    transition:
+        flex-basis 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Al abrirse crece hasta un ancho cómodo pero acotado. Si se dejara el 100% original,
-   empujaría los desplegables fuera de la fila cada vez que el usuario pincha en la lupa. */
 .barra-filtros .buscador-clientes.expandido {
     flex-basis: 20rem;
     max-width: 100%;
 }
 
-/* Ancho natural de cada desplegable, con un mínimo para que quepa el texto de las
-   opciones ("Todas las provincias") sin recortarlo. */
+
+/* Filtros */
+
 .barra-filtros .control-filtro {
     width: auto;
     min-width: 210px;
@@ -322,9 +377,9 @@ footer {
     min-width: 290px;
 }
 
-/* Los controles de Bootstrap con el mismo aire que el buscador: bordes suaves y
-   esquinas redondeadas, para que la barra se lea como un conjunto y no como
-   piezas sueltas de dos diseños distintos. */
+
+/* Controles */
+
 .barra-filtros .form-select,
 .barra-filtros .input-group-text,
 .barra-filtros .btn-direccion {
@@ -334,16 +389,17 @@ footer {
     height: var(--alto-control);
 }
 
-/* El icono en azul de marca sobre un fondo apenas teñido: en gris pasaba por adorno y
-   costaba ver dónde empieza cada control. */
+
+/* Icono */
+
 .barra-filtros .input-group-text {
     color: var(--primary-color);
     background-color: #f2f6ff;
 }
 
-/* Filtro PUESTO. Es lo único de la barra donde el color aporta información en vez de
-   decorar: de un vistazo se ve por qué la tabla enseña 4 clientes y no 28. El peso de
-   la letra acompaña al color para no depender solo de él. */
+
+/* Filtro activo */
+
 .barra-filtros .control-filtro.activo .input-group-text {
     color: var(--white);
     background-color: var(--primary-color);
@@ -355,15 +411,20 @@ footer {
     font-weight: 600;
 }
 
+
+/* Foco */
+
 .barra-filtros .form-select:focus,
 .barra-filtros .btn-direccion:hover {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 0.2rem rgba(71, 118, 247, 0.15);
 }
 
-/* El botón de dirección se lee como parte del selector que tiene al lado. */
+
+/* Botón de dirección */
+
 .barra-filtros .btn-direccion {
-    white-space: nowrap;   /* "Más recientes" no debe partirse en dos líneas */
+    white-space: nowrap;
     font-weight: 600;
 }
 
@@ -375,11 +436,14 @@ footer {
     margin-right: 0.35rem;
 }
 
+
+/* Botón limpiar */
+
 .barra-filtros .btn-limpiar {
     color: #64748b;
     text-decoration: none;
     white-space: nowrap;
-    margin-left: auto;   /* se va al extremo derecho de la fila */
+    margin-left: auto;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -390,10 +454,11 @@ footer {
     color: var(--primary-color);
 }
 
-/* --- Cabeceras de tabla ordenables --- */
 
-/* Es un <button> de verdad (para poder usarlo con el teclado), así que hay que
-   quitarle el aspecto de botón y devolverle el de cabecera. */
+/* ==========================================
+   CABECERAS DE TABLA ORDENABLES
+   ========================================== */
+
 .cabecera-ordenable {
     background: none;
     border: none;
@@ -411,8 +476,6 @@ footer {
     text-decoration: underline;
 }
 
-/* La flecha se ve tenue en las columnas por las que NO se está ordenando: así se
-   sabe que son pulsables sin competir con la que marca el orden real. */
 .flecha-orden {
     opacity: 0.45;
     font-size: 0.85em;
@@ -423,24 +486,15 @@ footer {
     opacity: 1;
 }
 
-/* --- Buscador de clientes animado ---
-   Cerrado es una píldora con la lupa y la palabra "Buscar"; al enfocarlo se estira hasta
-   el campo completo. Antes era un círculo de 50px con la lupa sola: un icono suelto no
-   comunica que se pueda pulsar y, con el placeholder oculto, no quedaba ninguna pista de
-   que ahí se buscaba. La palabra es la única señal que nadie tiene que adivinar. */
+
+/* ==========================================
+   BUSCADOR DE CLIENTES ANIMADO
+   ========================================== */
+
 .buscador-clientes {
-    /* Estas dos medidas tienen que cuadrar entre sí, así que viven aquí como variables en
-       vez de repartidas por los bloques de abajo. El ancho cerrado DEBE superar el relleno
-       (3.2rem de la lupa + 1rem) o, con box-sizing:border-box, el input se dibuja más ancho
-       que su contenedor y vuelve a meterse por debajo del filtro de provincia. */
     --hueco-lupa: 3.2rem;
     --ancho-cerrado: 9rem;
 
-    /* El ancho, el encogimiento y la transición se deciden en un único sitio, el bloque
-       '.barra-filtros .buscador-clientes' de arriba: dentro de una fila flexible manda
-       flex-basis y lo que se escriba aquí como width no llega a aplicarse nunca. Estaban en
-       los dos, diciendo cosas contrarias, y el comentario de este bloque defendía justo lo
-       que el otro deshacía. */
     position: relative;
     height: var(--alto-control);
 }
@@ -449,29 +503,37 @@ footer {
     box-sizing: border-box;
     width: 100%;
     height: 100%;
-    padding: 0 1rem 0 var(--hueco-lupa);   /* hueco a la izquierda para la lupa */
+
+    padding: 0 1rem 0 var(--hueco-lupa);
+
     border: 1px solid var(--borde-suave);
-    border-radius: calc(var(--alto-control) / 2);   /* píldora, abierta y cerrada */
+    border-radius: calc(var(--alto-control) / 2);
+
     font-size: 1rem;
     color: var(--text-main);
     background-color: var(--white);
+
     outline: none;
-    cursor: pointer;   /* cerrado se pulsa, no se escribe */
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
-/* La palabra "Buscar" ocupa el sitio del placeholder mientras está cerrado. Es decorativa
-   para los lectores de pantalla (el input ya tiene su aria-label) y no intercepta el clic,
-   que va a parar al input de debajo. */
 .buscador-clientes .buscador-etiqueta {
     position: absolute;
     top: 50%;
     left: var(--hueco-lupa);
+
     transform: translateY(-50%);
+
     color: #6b7280;
     font-weight: 500;
+
     pointer-events: none;
     white-space: nowrap;
+
     transition: opacity 0.2s ease;
     z-index: 2;
 }
@@ -480,19 +542,14 @@ footer {
     opacity: 0;
 }
 
-/* El placeholder solo cuando hay sitio para leerlo entero */
 .buscador-clientes .buscador-input::placeholder {
     color: transparent;
     transition: color 0.2s ease;
 }
 
-/* El mismo gris que la palabra "Buscar" de al lado: un placeholder es texto y le aplica el
-   criterio 1.4.3 igual que a cualquier otro. El #9ca3af que había daba 2.54:1 sobre blanco,
-   muy por debajo del 4.5:1; con #6b7280 sube a 4.83:1 y además los dos textos que dicen lo
-   mismo en el mismo control se ven ya del mismo color. */
 .buscador-clientes.expandido .buscador-input::placeholder {
     color: #6b7280;
-    transition-delay: 0.15s;   /* aparece cuando la píldora ya se ha abierto */
+    transition-delay: 0.15s;
 }
 
 .buscador-clientes.expandido .buscador-input {
@@ -504,117 +561,85 @@ footer {
     box-shadow: 0 0 0 0.2rem rgba(71, 118, 247, 0.15);
 }
 
-/* La lupa vive en su hueco, calculado desde la misma variable que usa el relleno del
-   input: así los dos no pueden descuadrarse. */
 .buscador-clientes .buscador-icono {
     position: absolute;
     top: 50%;
     left: calc(var(--hueco-lupa) / 2);
+
     transform: translate(-50%, -50%);
+
     color: var(--primary-color);
     pointer-events: none;
     z-index: 2;
 }
 
-/* Con texto escrito, el buscador es un filtro más y se marca como los desplegables. */
 .buscador-clientes.activo .buscador-input {
     border-color: var(--primary-color);
     font-weight: 600;
 }
 
+
 /* ==========================================
    AVISOS DE LA PANTALLA
    ========================================== */
 
-/* Franja que cuenta lo que está pasando en la pantalla. La usan las CUATRO páginas, no solo
-   clientes, y en todas va en el mismo sitio: entre los controles y el contenido. En clientes
-   además está fuera de la tabla, porque el refresco que sigue a un guardado la repinta
-   entera y se llevaría el aviso por delante. */
 .aviso {
     margin: 0 0 0.75rem;
     padding: 0.5rem 0.85rem;
+
     border-left: 4px solid #94a3b8;
     border-radius: 0.35rem;
+
     background-color: #f1f5f9;
     color: #334155;
+
     font-weight: 500;
 }
 
-/* El de arriba es el tono neutro, y debajo van las dos variantes. Cuál se pone NO lo decide
-   quien escribe el mensaje: sale solo de haber llamado a anunciar() (un evento, que o ha ido
-   bien o ha fallado) o a fijar() (un estado, que solo informa). Está explicado en
-   notificaciones.js, que es quien pone estas clases. */
-
-/* Verde de confirmacion, el mismo del alta. Antes leia --estado-detalle, que servia
-   porque tambien era verde; al pasar el detalle a morado se habria quedado un borde
-   morado sobre fondo verde. El color de esta franja depende de lo que significa
-   (algo ha ido bien), no del estado en que este una fila. */
 .aviso.aviso-exito {
     border-left-color: var(--estado-alta);
     background-color: #eaf6ef;
     color: #14532d;
 }
 
-/* Que algo haya ido mal no se dice solo con el color (criterio 1.4.1): cambian el texto y la
-   franja de la izquierda, que es lo que sigue viéndose en escala de grises. */
 .aviso.aviso-error {
     border-left-color: #b02a37;
     background-color: #fdecee;
     color: #842029;
 }
 
-/* Se esconde vacía en vez de con el atributo hidden: el elemento tiene que estar siempre en
-   el documento para que su gemela invisible (#anuncios) tenga sentido, y con hidden habría
-   que acordarse de quitarlo y ponerlo en cada mensaje. */
 .aviso:empty {
     display: none;
 }
+
 
 /* ==========================================
    TABLA DE CLIENTES
    ========================================== */
 
-/* Las cuatro esquinas redondeadas van en el contenedor, no en la tabla: con
-   border-collapse:collapse (que es lo que hereda cualquier <table>), el radio de la tabla
-   no recorta el fondo de las celdas y la cabecera azul seguiría saliendo en pico. El
-   contenedor ya tiene overflow-x:auto, así que recorta sin tocar el scroll horizontal. */
 .table-responsive {
     border: 1px solid #dbe3ef;
     border-radius: var(--radio-tabla);
     background-color: var(--white);
 }
 
-/* El margen inferior que Bootstrap le da a toda .table dejaría una franja blanca dentro del
-   recuadro, entre la última fila y el borde redondeado. */
 .tabla-clientes {
     margin-bottom: 0;
 }
 
-/* La última fila no lleva su raya: se juntaría con el borde del contenedor y se vería
-   una línea doble justo en el redondeo.
-
-   Se excluye el panel desplegado porque su raya de abajo no es una separación entre filas:
-   es el cuarto lado del recuadro de color que envuelve al cliente abierto. Sin la excepción,
-   abrir el último cliente de la página dejaba el recuadro sin cerrar por abajo. */
 .tabla-clientes > tbody > tr:last-child:not(.fila-despliegue) > * {
     border-bottom: 0;
 }
 
-/* El nombre es un <th> dentro del cuerpo; sin esto saldría en negrita de navegador y
-   pesaría más que el resto de la fila. */
 .tabla-clientes > tbody > tr > th {
     font-weight: 600;
     color: var(--text-main);
 }
 
-/* Rayado alterno en azul muy suave, pintado por cliente y no por fila del DOM: lo marca
-   js/tabla.js, de modo que insertar paneles de detalle no descoloca la alternancia. */
 .tabla-clientes .fila-cliente.fila-par > * {
     background-color: var(--fila-rayada);
 }
 
-/* Email y teléfono como enlaces útiles, pero sin el azul subrayado de un enlace suelto:
-   dentro de una celda eso convertiría la tabla en un mar de azul. */
 .enlace-celda {
     color: inherit;
     text-decoration: none;
@@ -626,29 +651,20 @@ footer {
     text-decoration: underline;
 }
 
-/* Mientras llega la página siguiente se atenúa lo que hay: sin esto la tabla enseña datos
-   viejos como si fueran los nuevos. El aria-busy lo pone js/listado.js, en el contenedor y no
-   en el <tbody>: es el contenedor el que ya es una región anunciable (role="region"). */
 .table-responsive[aria-busy="true"] {
     opacity: 0.5;
     transition: opacity 0.15s ease;
 }
 
+
 /* ==========================================
-   DESPLIEGUE DE LA FILA (ver detalle / editar)
+   DESPLIEGUE DE LA FILA
    ========================================== */
 
-/* La fila se lee como pulsable, que es el gesto que se le presupone a una tabla así. */
 .fila-cliente {
     cursor: pointer;
 }
 
-/* Color del estado: morado si se está viendo, ámbar si se está editando, verde si es un alta.
-   Se declara en la fila y lo heredan las celdas y el panel, así que todo el bloque cambia de
-   color con una sola clase.
-
-   Aquí solo va el color del BORDE. El del cartel lo pone cada .etiqueta-* por su cuenta, y el
-   motivo está explicado junto a ellas: una variable de modo no sobrevive al plegado. */
 .fila-cliente.modo-detalle,
 .fila-despliegue.modo-detalle {
     --color-modo: var(--borde-detalle);
@@ -659,45 +675,25 @@ footer {
     --color-modo: var(--borde-edicion);
 }
 
-/* El alta no tiene fila de cliente encima —el cliente todavía no existe—, así que este modo
-   solo lo lleva el panel. */
 .fila-despliegue.modo-alta {
     --color-modo: var(--borde-alta);
 }
 
-/* Rojo para el borrado. Es el único de los cuatro que pregunta antes de hacer algo que no se
-   puede deshacer, y el color es la mitad del aviso: la otra mitad la pone el cartel escrito
-   dentro del panel, porque el color por sí solo no vale (criterio 1.4.1 de WCAG). */
 .fila-cliente.modo-borrado,
 .fila-despliegue.modo-borrado {
     --color-modo: var(--borde-borrado);
 }
 
-/* La fila abierta y su panel se resaltan juntos para que se vea de un vistazo a quién
-   pertenece lo que hay debajo.
-
-   El 'box-shadow: none' no es decorativo: Bootstrap pinta el resaltado de table-hover con
-   una sombra interior que cubre la celda entera (inset 0 0 0 9999px). Sin quitarla,
-   taparía este fondo y el bloque se vería partido en dos tonos distintos.
-
-   El 'tr' del selector no sobra: sin él esto pesa lo mismo que el rayado alterno de
-   .fila-par y el fondo dependería de cuál de las dos reglas esté escrita más abajo, que es
-   una forma muy silenciosa de romperse el día que alguien reordene el archivo. */
 .tabla-clientes tr.fila-cliente.desplegada > *,
 .tabla-clientes .fila-despliegue > td {
     background-color: var(--fila-abierta);
     box-shadow: none;
 }
 
-/* Sin esto la fila abierta pierde toda respuesta al ratón, porque le hemos quitado la
-   sombra con la que Bootstrap pinta el hover. */
 .tabla-clientes tr.fila-cliente.desplegada:hover > * {
     background-color: var(--fila-abierta-hover);
 }
 
-/* Recuadro del bloque "cliente + panel": la fila pone tres lados y el panel el cuarto, de
-   modo que los dos <tr> se leen como una sola tarjeta. La raya de abajo de la fila se
-   quita porque, si no, cruzaría el recuadro por la mitad. */
 .fila-cliente.desplegada > * {
     border-top: 2px solid var(--color-modo);
     border-bottom: 0;
@@ -716,15 +712,6 @@ footer {
     border-top: 0;
 }
 
-/* Los tres lados que pinta el panel van CONDICIONADOS al modo, no puestos siempre.
-   Al cerrar, marcarFila() quita las clases de modo pero el panel se queda 250 ms en el
-   documento plegándose: sin esta condición, --color-modo deja de existir, el var() no
-   resuelve, border-color cae a su valor inicial (currentColor, o sea el color del texto) y
-   se veía una raya oscura parpadear en cada cierre.
-
-   El '.tabla-clientes' del principio no sobra: sin él, esto pesa exactamente lo mismo que la
-   regla del fondo de unas líneas más arriba, que también pone box-shadow, y cuál gana pasaría
-   a depender de cuál esté escrita más abajo. */
 .tabla-clientes .fila-despliegue.modo-detalle > td,
 .tabla-clientes .fila-despliegue.modo-edicion > td,
 .tabla-clientes .fila-despliegue.modo-alta > td,
@@ -733,43 +720,32 @@ footer {
     border-right: 2px solid var(--color-modo);
     border-bottom: 2px solid var(--color-modo);
 
-    /* El halo del color del estado: es lo que hace que el borde se lea como neón en vez de
-       como una raya de color. Va con radio negativo (-4px) para que quede pegado y tenue,
-       no como una sombra de tarjeta.
-
-       Se pone en el <td> del PANEL y no en las celdas de la fila a propósito. Aquellas llevan
-       un 'box-shadow: none' que no es decorativo: mata el resaltado de table-hover de
-       Bootstrap, que es un inset gigante. Puesto ahí, el halo lo reviviría y el bloque se
-       vería partido en dos tonos. */
     box-shadow: 0 0 14px -4px var(--color-modo);
 }
 
-/* El alta cierra su recuadro por arriba ella sola. En el detalle y en la edición ese lado lo
-   pone la fila del cliente ('.fila-cliente.desplegada > *', más arriba), pero el alta no tiene
-   fila encima —el cliente todavía no existe— y sin esto el recuadro se quedaba abierto por
-   arriba, como una U. */
 .tabla-clientes .fila-despliegue.modo-alta > td {
     border-top: 2px solid var(--color-modo);
 }
 
-/* Cartel de estado del panel. El borde de color por sí solo no vale: quien no distingue
-   verde de ámbar necesita leerlo (criterio 1.4.1 de WCAG). */
+
+/* ==========================================
+   ETIQUETAS DE ESTADO
+   ========================================== */
+
 .etiqueta-estado {
     margin: 0 0 0.5rem;
+
     font-size: 0.75rem;
     font-weight: 700;
+
     text-transform: uppercase;
     letter-spacing: 0.04em;
+
     display: flex;
     align-items: center;
     gap: 0.4rem;
 }
 
-/* Cada cartel lleva su color DIRECTO, y no una variable que ponga el modo como hace el borde.
-   Al cerrar, marcarFila() quita las clases de modo pero el panel se queda 250 ms plegándose:
-   una var() declarada en el modo dejaría de resolver a media animación y el texto cambiaría
-   de color mientras se pliega. Es el mismo motivo por el que los bordes del panel van
-   condicionados al modo unas líneas más arriba. */
 .etiqueta-detalle {
     color: var(--estado-detalle);
 }
@@ -786,9 +762,11 @@ footer {
     color: var(--estado-borrado);
 }
 
-/* Truco de grid para animar una altura que no se conoce de antemano: 0fr -> 1fr sí
-   transiciona y 'height: auto' no. Va en un div y no en el <tr> porque las filas de una
-   tabla no admiten este tipo de animación. */
+
+/* ==========================================
+   ANIMACIÓN DEL DESPLIEGUE
+   ========================================== */
+
 .despliegue-envoltorio {
     display: grid;
     grid-template-rows: 0fr;
@@ -799,13 +777,10 @@ footer {
     grid-template-rows: 1fr;
 }
 
-/* Imprescindible: es lo que recorta el contenido mientras la fila del grid vale 0fr. */
 .despliegue-contenido {
     overflow: hidden;
 }
 
-/* Al cambiar de modo se atenúa lo que ya había en vez de vaciarlo: el panel no se encoge
-   para volver a estirarse y no da el salto. */
 .despliegue-contenido.cargando {
     opacity: 0.5;
     transition: opacity 0.15s ease;
@@ -815,13 +790,11 @@ footer {
     padding: 0.75rem 1rem;
 }
 
-/* --- Contenido de los paneles: rejillas, no tablas ---
 
-   El detalle es una lista de descripción y la edición un formulario, y los dos se colocan
-   con la MISMA rejilla para que se lean igual al pasar de un modo al otro. auto-fit con
-   minmax deja que las columnas se repartan solas: en un escritorio salen las cuatro o cinco
-   en fila (que es como se veían cuando esto eran tablas) y en móvil se apilan sin necesidad
-   de una media query aparte. */
+/* ==========================================
+   DATOS Y FORMULARIOS
+   ========================================== */
+
 .datos-cliente,
 .grupo-edicion {
     display: grid;
@@ -830,10 +803,6 @@ footer {
     margin: 0 0 0.75rem;
 }
 
-/* El <fieldset> trae de serie borde, margen y relleno del navegador: sin quitarlos, cada
-   grupo saldría con un recuadro gris alrededor que compite con el borde de color del panel.
-   Y sin min-width:0 un fieldset se niega a encogerse por debajo de su contenido, que es una
-   rareza suya y rompe la rejilla en pantallas estrechas. */
 .grupo-edicion {
     border: 0;
     padding: 0;
@@ -844,41 +813,26 @@ footer {
     margin-bottom: 0.5rem;
 }
 
-/* Los rótulos, más discretos que las cabeceras de la tabla principal: son de un detalle, no
-   de la lista. Mismo aspecto para el <dt> del detalle y el <label> de la edición. */
-/* El gris es el más claro que se puede usar aquí: a 0.75rem y en negrita esto NO cuenta como
-   texto grande, así que necesita 4.5:1 (criterio 1.4.3), y sobre el fondo del panel abierto
-   (--fila-abierta, #dbe6ff) el #64748b que había antes se quedaba en 4.12:1. Con #475569
-   sube a 6.56:1. */
 .datos-cliente dt,
 .campo-edicion label {
     display: block;
+
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
+
     color: #475569;
     font-weight: 600;
+
     margin-bottom: 0.2rem;
 }
 
-/* El <dd> trae sangría del navegador y aquí no la queremos: el valor va justo debajo de su
-   rótulo, alineado con él. */
 .datos-cliente dd {
     margin: 0;
     color: var(--text-main);
-    overflow-wrap: anywhere;   /* un correo largo no debe ensanchar la columna */
+    overflow-wrap: anywhere;
 }
 
-/* El lápiz de cada campo editable, en el color del estado al que pertenece el formulario:
-   ámbar al editar, verde al dar de alta. Los dos paneles clonan la MISMA plantilla, así que
-   sin distinguirlos saldrían lápices ámbar dentro del recuadro verde del alta.
-
-   Se distingue por la clase del <form> y no por el modo de la fila a propósito: las clases
-   de modo se quitan al cerrar y el panel se queda 250 ms plegándose, así que el icono
-   cambiaría de color a media animación. La del formulario no se va nunca.
-
-   Va en el tono OSCURO y no en el del borde: es un glifo de 0.7em, y en el ámbar vivo del
-   borde se lee mucho peor a ese tamaño. */
 .icono-editable {
     font-size: 0.7em;
     margin-right: 0.15rem;
@@ -892,13 +846,10 @@ footer {
     color: var(--estado-alta);
 }
 
-/* El campo ocupa el ancho de su columna; si no, los input cortos dejan la rejilla desigual. */
 .campo-edicion .form-control {
     width: 100%;
 }
 
-/* Mismo gris que los rótulos y por el mismo motivo: sobre el fondo del panel, el #64748b
-   anterior se quedaba en 4.12:1 y el texto necesita 4.5:1. */
 .panel-aviso {
     margin: 0;
     color: #475569;
@@ -908,14 +859,15 @@ footer {
     color: #b91c1c;
 }
 
-/* --- Formulario de edición en la propia fila --- */
+
+/* ==========================================
+   FORMULARIO DE EDICIÓN
+   ========================================== */
 
 .formulario-edicion .marca-obligatorio {
     color: #dc3545;
 }
 
-/* Bootstrap pinta de verde y con un tic todo lo que está bien; con ocho campos a la vez eso
-   es más ruido que información, así que dejamos solo el rojo de lo que falla. */
 .formulario-edicion.was-validated .form-control:valid {
     border-color: #cbd5e1;
     background-image: none;
@@ -935,37 +887,30 @@ footer {
     gap: 0.5rem;
 }
 
-/* La alerta de un formulario: POR QUÉ no se ha podido guardar, dentro del propio panel o
-   modal en vez de en la franja de la página. La usan los tres formularios que hay (cliente,
-   factura y emisor).
 
-   Es la hermana pequeña de .aviso —misma barra a la izquierda y mismo fondo tenue, cuerpo
-   menor— para que las dos capas de aviso se lean como una sola familia y no como dos
-   sistemas que casualmente conviven. */
+/* ==========================================
+   ALERTAS DE FORMULARIO
+   ========================================== */
+
 .alerta-formulario {
     margin: 0;
     padding: 0.4rem 0.6rem;
+
     border-left: 3px solid #94a3b8;
     border-radius: 0.3rem;
+
     background-color: #f1f5f9;
     color: #334155;
+
     font-size: 0.9rem;
 }
 
-/* Rojo solo cuando de verdad ha fallado algo. No todo lo que cae en esta alerta es un error:
-   al reabrir un panel cuyos datos han cambiado se cuenta aquí mismo qué campos se han
-   refrescado, y eso es información, no un problema. Mismo reparto de tonos que en .aviso, y
-   por el mismo motivo: el color no va solo (criterio 1.4.1), cambia también la barra. */
 .alerta-formulario.alerta-error {
     border-left-color: #b02a37;
     background-color: #fdecee;
     color: #842029;
 }
 
-/* Vacía no ocupa. Va con :empty y no con hidden ni con d-none por lo mismo que la franja de
-   avisos: el role="alert" solo funciona si el elemento lleva ahí desde antes del mensaje,
-   así que no puede quitarse y volver a ponerse. Y de paso nadie tiene que acordarse de
-   esconderla a mano. */
 .alerta-formulario:empty {
     display: none;
 }
@@ -976,7 +921,10 @@ footer {
     margin-left: auto;
 }
 
-/* --- Panel de borrado ---------------------------------------------------------------- */
+
+/* ==========================================
+   PANEL DE BORRADO
+   ========================================== */
 
 .borrado-pregunta {
     margin: 0 0 0.75rem;
@@ -984,16 +932,10 @@ footer {
     max-width: 60ch;
 }
 
-/* El nombre del cliente que se va a borrar, destacado dentro de la frase: es el dato que hay
-   que leer antes de decidir, y el <strong> lo marca también para quien no ve la pantalla. */
 .borrado-pregunta .borrado-nombre {
     font-weight: 700;
 }
 
-/* El motivo cuando el servidor rechaza el borrado (409: el cliente tiene facturas). El
-   aspecto y el ocultado los pone .alerta-formulario, que lleva puesta; esta clase solo la
-   separa de los botones que tiene debajo, y es además el gancho por el que la busca
-   borrado.js. */
 .alerta-borrado {
     margin-bottom: 0.75rem;
 }
@@ -1004,85 +946,50 @@ footer {
     justify-content: flex-end;
 }
 
-/* Quien tenga desactivadas las animaciones del sistema abre y cierra sin transición. */
+
+/* ==========================================
+   ACCESIBILIDAD: REDUCIR MOVIMIENTO
+   ========================================== */
+
 @media (prefers-reduced-motion: reduce) {
+
     .despliegue-envoltorio,
     .barra-filtros .buscador-clientes,
     .buscador-clientes .buscador-input,
     .buscador-clientes .buscador-etiqueta,
-    /* Con el atributo puesto, que es el unico momento en que la transicion esta activa.
-       .table-responsive[aria-busy="true"] tiene mas especificidad que .table-responsive y
-       las media queries no suman, asi que sin repetir el atributo esta regla no ganaba: el
-       fundido se ejecutaba igual para quien pidio no ver animaciones. */
     .table-responsive,
     .table-responsive[aria-busy="true"],
     .despliegue-contenido.cargando {
         transition: none;
     }
 }
-
-/* ==========================================
-   RESPONSIVE
-   ========================================== */
-@media (max-width: 768px) {
-    .hero h1 { font-size: 2.5rem; }
-    
-    /* En móviles, los enlaces se acomodan debajo del logo */
-    .navbar .container, 
-    .navbar .container-fluid {
-        flex-direction: column;
-        gap: 1rem;
-    }
-    
-    .navbar-nav {
-        margin: 0;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    /* En móvil cada control ocupa el ancho completo: apilados se leen mejor que
-       apretados, y así ninguno queda cortado. */
-    .barra-filtros .control-filtro,
-    .barra-filtros .control-orden,
-    .barra-filtros .buscador-clientes.expandido {
-        width: 100%;
-        min-width: 0;
-    }
-
-    /* El buscador se dimensiona con flex-basis (ver la barra de filtros), así que el 100%
-       de arriba no le bastaría: en una línea flexible el basis es quien decide. */
-    .barra-filtros .buscador-clientes.expandido {
-        flex-basis: 100%;
-    }
-
-    /* Sin espacio de sobra a la izquierda, el "Limpiar" se alinea con el resto. */
-    .barra-filtros .btn-limpiar {
-        margin-left: 0;
-    }
-}
+/* ========================================== NAVBAR EN ORDENADORES ========================================== */ .navbar-nav { display: flex; flex-direction: row; align-items: center; gap: 5px; list-style: none; margin: 0; padding: 0; } /* ========================================== RESPONSIVE GLOBAL ========================================== */ /* TABLET / PORTÁTIL PEQUEÑO */ @media (max-width: 992px) { /* De momento no necesitamos cambios adicionales para el navbar aquí. */ } /* ========================================== NAVBAR EN MÓVILES ========================================== */ @media (max-width: 768px) { .navbar { padding: 10px 0; } .navbar .container { position: relative; flex-wrap: wrap; } .navbar-brand { font-size: 1.1rem; } .logo { width: 38px; height: 38px; } /* Mostrar botón hamburguesa */ .menu-button { display: flex; margin-left: auto; } /* Menú cerrado */ .navbar-nav { width: 100%; display: none; flex-direction: column; align-items: stretch; gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e5e7eb; } /* Menú abierto */ .menu-toggle:checked ~ .navbar-nav { display: flex; } /* Cambiar icono hamburguesa por X */ .menu-toggle:checked + .menu-button i::before { content: "\f00d"; } .nav-link { width: 100%; padding: 13px 15px; font-size: 1rem; border-radius: 8px; } .nav-link.active { background: #1e4bb8; } } /* ========================================== MÓVIL PEQUEÑO ========================================== */ @media (max-width: 480px) { .navbar-brand { font-size: 1rem; } .logo { width: 34px; height: 34px; } .menu-button { width: 40px; height: 40px; } }
 
 /* ==========================================
    PANTALLA DE CARGA
    ========================================== */
+
 .pantalla-carga {
     position: fixed;
     top: 0;
     left: 0;
+
     width: 100vw;
     height: 100vh;
-    background-color: rgba(255, 255, 255, 0.7); /* Fondo blanco semitransparente */
+
+    background-color: rgba(255, 255, 255, 0.7);
+
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 9999; /* Asegura que quede por encima de modales y navbars */
+
+    z-index: 9999;
 }
 
-/* Forzar la ocultación cuando tenga la clase d-none */
 .pantalla-carga.d-none {
     display: none !important;
 }
 
-/* Ajusta el tamaño de tu GIF aquí */
 .spinner-carga {
     width: 80px;
     height: 80px;
