@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!--/*
+    Bloque QR · Orden HAC/1177/2024, arts. 20 y 21.
+
+    Vive en su propio fichero y no dentro de factura-pdf.html porque un
+    fragmento definido en el mismo <body> que lo usa se pintaría además en el
+    sitio donde está declarado, duplicando el código.
+
+    Solo aparece en facturas emitidas: un borrador no tiene registro de
+    facturación y por tanto no tiene URL en la sede de la AEAT. El servicio pasa
+    «qr» a null en ese caso, y también cuando no hay emisor configurado, porque
+    su NIF forma parte de la URL que se codifica.
+
+    El tamaño del código (35 mm en A4, 30 mm en A5) y su zona de silencio salen
+    de factura-pdf.css. Los 30 mm son el MÍNIMO legal del art. 21: es lo único
+    del documento que no se encoge cuando se comprime la hoja.
+*/-->
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<body>
+
+<div th:fragment="bloqueQr" class="bloque-qr" th:if="${qr}">
+
+    <!--/* A4 y Carta: rótulo encima, código, leyenda debajo. */-->
+    <div th:unless="${estrecha}">
+        <p class="rotulo-qr">QR tributario:</p>
+        <img th:src="${qr}" alt="Código QR de verificación fiscal" />
+        <p class="leyenda-qr">VERI*FACTU<span class="nota">Factura verificable en la sede electrónica de la AEAT</span></p>
+    </div>
+
+    <!--/*
+        A5: el código a la izquierda y sus leyendas a la derecha. Los textos son
+        los mismos y siguen a 9pt, pero dejan de sumar alto: son los 17 mm que
+        le faltan al A5 para caber en un folio.
+    */-->
+    <table class="qr-tabla" th:if="${estrecha}">
+        <tr>
+            <td>
+                <img th:src="${qr}" alt="Código QR de verificación fiscal" />
+            </td>
+            <td class="qr-textos">
+                <p class="rotulo-qr">QR tributario:</p>
+                <p class="leyenda-qr">VERI*FACTU<span class="nota">Factura verificable en la sede electrónica de la AEAT</span></p>
+            </td>
+        </tr>
+    </table>
+</div>
+
+</body>
+</html>

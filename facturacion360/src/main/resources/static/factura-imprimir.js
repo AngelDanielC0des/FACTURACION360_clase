@@ -19,7 +19,7 @@ const estiloHoja    = document.getElementById("estiloFormatoPapel");
 // Los avisos de esta pantalla. Aquí la franja es el propio rótulo de estado del visor: el
 // "Cargando factura..." que ya viene escrito en el HTML es un estado, no un evento, así que
 // se queda hasta que la factura carga (limpiar) o hasta que falla (fijar).
-const { fijar, limpiar } = crearAvisos({
+const { anunciar, fijar, limpiar } = crearAvisos({
     franja: estadoVisor,
     region: document.getElementById("anuncios"),
 });
@@ -80,6 +80,7 @@ function mostrarDetalle(detalle) {
     contenidoFactura.classList.remove("d-none");
     documentoFactura.setAttribute("aria-busy", "false");
     botonImprimir.disabled = false;
+    prepararCompartir(detalle);
 
     const esBorrador = factura.estado === "BORRADOR";
     marcaAgua.classList.toggle("d-none", !esBorrador);
@@ -541,6 +542,12 @@ function actualizarFormatoPapel() {
 selectFormato.addEventListener("change", actualizarFormatoPapel);
 actualizarFormatoPapel();
 
+// El PDF que hubiera pedido el menú de compartir es del formato anterior. Hoy
+// no se puede dar —el menú se cierra en cuanto se toca el selector— pero la
+// invariante «el PDF pedido es el de lo que se está viendo» se mantiene aquí y
+// no se confía a que el popover siga comportándose igual.
+selectFormato.addEventListener("change", () => { pdfPedido = null; });
+
 // Cualquier cambio de tamaño (texto largo, logo que no carga, cambio de
 // formato) vuelve a partir el contenido en hojas.
 new ResizeObserver(programarPaginar).observe(document.body);
@@ -639,14 +646,37 @@ async function ejecutarBusqueda() {
     try {
         const respuesta = await fetch("/factura/buscar?" + parametros);
         if (!respuesta.ok) {
-            contadorResultados.textContent = "Error al buscar facturas.";
+            avisarEnElPanel(await motivoDe(respuesta, "No se pudieron buscar las facturas."));
             return;
         }
         const facturas = await respuesta.json();
         mostrarResultadosBusqueda(facturas);
-    } catch {
-        contadorResultados.textContent = "No se pudo conectar con el servidor.";
+
+    } catch (error) {
+        // Se registra la excepción en vez de tragársela: por aquí pasan tanto
+        // los cortes de red como cualquier fallo al pintar los resultados, y
+        // sin rastro en la consola los segundos se confunden con los primeros.
+        console.error("Error al buscar facturas", error);
+        avisarEnElPanel("No se pudo conectar con el servidor.");
     }
+}
+
+/**
+ * Cuenta un problema dentro del panel de búsqueda.
+ *
+ * No se usa la franja de avisos de la pantalla porque el panel la tapa: ocupa
+ * toda la ventana, así que un mensaje detrás no lo ve nadie. Se escribe en el
+ * mismo sitio donde va el recuento, pero marcado como error —antes salía en
+ * gris pequeño, igual que un «3 factura(s) encontrada(s)», y un error que
+ * parece un recuento no se lee— y se repite en la región viva para quien
+ * navega con lector de pantalla.
+ *
+ * @param {string} mensaje el problema, ya en español
+ */
+function avisarEnElPanel(mensaje) {
+    contadorResultados.textContent = mensaje;
+    contadorResultados.classList.add("contador-error");
+    anunciar(mensaje);
 }
 
 campoBusqueda.addEventListener("input", buscarFacturasConRetardo);
@@ -669,6 +699,9 @@ function mostrarResultadosBusqueda(facturas) {
 
     contadorResultados.textContent = facturas.length + " factura(s) encontrada(s)"
         + (yaEnCola > 0 ? ` (${yaEnCola} ya en cola)` : "");
+    // Si la búsqueda anterior había fallado, el recuento vuelve a ser un
+    // recuento: sin esto se quedaría en rojo para siempre.
+    contadorResultados.classList.remove("contador-error");
     actualizarBotonAgregar();
 }
 
@@ -1128,3 +1161,300 @@ async function imprimirEnLote() {
 }
 
 botonImprimirTodas.addEventListener("click", imprimirEnLote);
+
+
+// ── Compartir ───────────────────────────────────────────────────────
+
+const botonCompartir  = document.getElementById("botonCompartir");
+const menuCompartir   = document.getElementById("menuCompartir");
+const avisoBorrador   = document.getElementById("avisoCompartirBorrador");
+const opcionWhatsapp  = document.getElementById("compartirWhatsapp");
+const opcionTelegram  = document.getElementById("compartirTelegram");
+const opcionCorreo    = document.getElementById("compartirCorreo");
+const opcionDescargar = document.getElementById("compartirDescargar");
+
+/**
+ * La factura que el visor está enseñando ahora mismo.
+ *
+ * Hace falta entera —y no solo su identificador— porque el mensaje lleva el
+ * número, la fecha y el importe, y el destinatario sale del cliente. Todo eso
+ * ya está en memoria desde que se pintó la factura, así que compartir no le
+ * vuelve a pedir nada al servidor salvo el propio PDF.
+ */
+let facturaCompartible = null;
+
+/**
+ * El PDF de la factura visible, pedido por adelantado.
+ *
+ * navigator.share() exige un gesto de usuario VIGENTE, y el viaje al servidor
+ * para generar el PDF se lo come: cuando la respuesta llega, el clic ya ha
+ * caducado y el navegador responde «Must be handling a user gesture». Por eso
+ * el PDF se pide al ABRIR el menú y no al elegir el canal: para cuando el
+ * usuario pulsa WhatsApp el fichero ya está, y share() se llama con el gesto
+ * todavía vivo.
+ *
+ * @type {Promise<File>|null}
+ */
+let pdfPedido = null;
+
+/**
+ * Deja el menú de compartir listo para la factura recién cargada.
+ *
+ * @param {object} detalle el mismo DetalleFactura que acaba de pintarse
+ */
+function prepararCompartir(detalle) {
+    facturaCompartible = detalle;
+    botonCompartir.disabled = false;
+
+    // El PDF que hubiera pedido es de la factura anterior: desde la cola se
+    // salta de una a otra sin recargar la página, y compartir el documento de
+    // otra factura es peor que tardar un segundo en pedir el correcto.
+    pdfPedido = null;
+
+    const esBorrador = detalle.factura.estado === "BORRADOR";
+    avisoBorrador.classList.toggle("d-none", !esBorrador);
+
+    // WhatsApp necesita un móvil. Un fijo (8xx o 9xx) no tiene cuenta, así que
+    // conviene avisar en vez de abrir un chat con un número que no existe.
+    const movil = movilParaWhatsapp(detalle.cliente.telefono);
+    opcionWhatsapp.title = movil
+        ? "Enviar a " + detalle.cliente.telefono
+        : "Este cliente no tiene un móvil guardado: WhatsApp se abrirá sin destinatario";
+}
+
+/**
+ * Pasa un teléfono guardado al formato que exige wa.me: dígitos y sin el «+».
+ *
+ * En la base de datos conviven «612345678», «+34612345678» y «+34 612345678»,
+ * porque la validación deja el prefijo opcional. Los tres se normalizan a la
+ * misma forma internacional suponiendo España, que es lo único que esa
+ * validación admite.
+ *
+ * @param {string|null} telefono el teléfono tal cual está guardado
+ * @return {string|null} el número en formato internacional, o null si no sirve
+ */
+function movilParaWhatsapp(telefono) {
+    const digitos = (telefono ?? "").replace(/\D/g, "");
+    if (digitos.length === 0) {
+        return null;
+    }
+
+    const nacional = digitos.startsWith("34") ? digitos.slice(2) : digitos;
+
+    // Solo los móviles españoles (6 y 7) tienen WhatsApp; 8 y 9 son fijos.
+    if (!/^[67]\d{8}$/.test(nacional)) {
+        return null;
+    }
+
+    return "34" + nacional;
+}
+
+/** El texto que acompaña al PDF en cualquiera de los tres canales. */
+function mensajeDeLaFactura() {
+    const f = facturaCompartible.factura;
+    const cabecera = f.estado === "BORRADOR"
+        ? "⚠ BORRADOR — NO VÁLIDO COMO FACTURA\n\n"
+        : "";
+
+    return cabecera
+        + "Factura " + f.numeroFactura + "\n"
+        + "Fecha: " + formatearFecha(f.fechaEmision) + "\n"
+        + "Total: " + formatearImporte(f.total);
+}
+
+/**
+ * Construye el enlace del canal.
+ *
+ * El esquema lo arma SIEMPRE el código y nunca el dato que llega del servidor,
+ * que es la regla que ya sigue el listado de clientes en js/fila.js: así un
+ * valor manipulado no puede colar un href de tipo «javascript:».
+ *
+ * @param {"whatsapp"|"telegram"|"correo"} canal a dónde se envía
+ * @param {string} texto el mensaje ya compuesto
+ * @return {string} la URL que hay que abrir
+ */
+function enlaceDelCanal(canal, texto) {
+    const cliente = facturaCompartible.cliente;
+
+    if (canal === "whatsapp") {
+        // Sin número, wa.me abre igualmente y deja elegir el contacto.
+        const movil = movilParaWhatsapp(cliente.telefono) ?? "";
+        return "https://wa.me/" + movil + "?text=" + encodeURIComponent(texto);
+    }
+
+    if (canal === "telegram") {
+        // Telegram no admite destinatario en el enlace: el chat se elige siempre.
+        // El mensaje va en «text» y no en «url», que es para una dirección: aquí
+        // no hay ninguna que compartir —la factura no es pública— y metiendo el
+        // texto en «url» Telegram lo presentaba como si fuera un enlace.
+        return "https://t.me/share/url?url=&text=" + encodeURIComponent(texto);
+    }
+
+    // Del destinatario se codifican SOLO '?', '&' y '#', que son los tres
+    // caracteres que en un mailto dejan de formar parte de la dirección y pasan
+    // a añadir cabeceras: un correo guardado como "a@b.com?bcc=otro@c.com"
+    // mandaría una copia oculta que nadie ha escrito. Es la misma defensa que
+    // aplica js/fila.js en la columna de email del listado de clientes.
+    const destinatario = (cliente.email ?? "").replace(/[?&#]/g, encodeURIComponent);
+    const asunto = "Factura " + facturaCompartible.factura.numeroFactura;
+
+    return "mailto:" + destinatario
+        + "?subject=" + encodeURIComponent(asunto)
+        + "&body=" + encodeURIComponent(texto);
+}
+
+/**
+ * Un fallo del que ya sabemos qué contarle al usuario, en español.
+ *
+ * Sirve para distinguirlo de las excepciones del navegador, cuyo mensaje viene
+ * en inglés y no se le puede enseñar a nadie.
+ */
+class FalloConocido extends Error {}
+
+/** Pide al servidor el PDF de la factura visible, en el formato elegido. */
+async function pedirPdf() {
+    const id = facturaCompartible.factura.idFactura;
+    const formato = selectFormato.value || "A4";
+
+    let respuesta;
+    try {
+        respuesta = await fetch("/factura/" + id + "/pdf?formato=" + encodeURIComponent(formato));
+    } catch (error) {
+        // fetch solo rechaza cuando ni siquiera hay conexión; un 500 llega como
+        // respuesta normal y se trata justo debajo.
+        console.error("No se pudo pedir el PDF de la factura", error);
+        throw new FalloConocido("No se pudo conectar con el servidor.");
+    }
+
+    if (!respuesta.ok) {
+        throw new FalloConocido(await motivoDe(respuesta, "No se pudo generar el PDF."));
+    }
+
+    const nombre = facturaCompartible.factura.numeroFactura.replace(/[^\w.-]/g, "_") + ".pdf";
+    return new File([await respuesta.blob()], nombre, { type: "application/pdf" });
+}
+
+/** Guarda el fichero en el disco del usuario. */
+function descargar(fichero) {
+    const url = URL.createObjectURL(fichero);
+    const enlace = document.createElement("a");
+    enlace.href = url;
+    enlace.download = fichero.name;
+    enlace.click();
+
+    // Se revoca en el siguiente turno y no aquí mismo: hay navegadores que aún
+    // no han empezado a leer el Blob cuando click() devuelve, y revocarlo en el
+    // acto les aborta la descarga. Sin revocarlo, el Blob se quedaría en memoria
+    // hasta recargar la página.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/**
+ * Comparte la factura por el canal indicado.
+ *
+ * Hay dos caminos, y los separa lo único que importa: si el navegador sabe
+ * entregar ficheros. En un móvil, navigator.share abre el selector del sistema
+ * y WhatsApp, Telegram o el correo reciben el PDF como adjunto de verdad. En un
+ * escritorio no existe ese selector, así que se descarga el PDF y se abre el
+ * canal con el texto ya escrito para que el usuario lo adjunte: ningún esquema
+ * de URL —ni mailto:, ni wa.me, ni t.me— puede llevar un fichero.
+ *
+ * @param {"whatsapp"|"telegram"|"correo"|"descargar"} canal
+ */
+async function compartir(canal) {
+    if (!facturaCompartible) {
+        return;
+    }
+
+    menuCompartir.hidePopover();
+
+    const textoOriginal = botonCompartir.innerHTML;
+    botonCompartir.disabled = true;
+    botonCompartir.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparando…';
+
+    try {
+        // Normalmente ya está pedido desde que se abrió el menú; el ?? es para
+        // cuando alguien llama sin pasar por él.
+        const fichero = await (pdfPedido ?? pedirPdf());
+        const texto = mensajeDeLaFactura();
+
+        if (canal !== "descargar" && await seHaCompartidoElFichero(fichero, texto)) {
+            return;
+        }
+
+        descargar(fichero);
+
+        if (canal === "descargar") {
+            fijar("PDF descargado.");
+            return;
+        }
+
+        window.open(enlaceDelCanal(canal, texto), "_blank", "noopener");
+        fijar("PDF descargado. Adjúntalo al mensaje que se acaba de abrir.");
+
+    } catch (error) {
+        // Nunca se enseña el mensaje de una excepción del navegador: vienen en
+        // inglés. Solo los nuestros, que ya están escritos para leerse.
+        const mensaje = error instanceof FalloConocido
+            ? error.message
+            : "No se pudo compartir la factura. Prueba a descargar el PDF.";
+
+        console.error("Error al compartir la factura", error);
+        fijar(mensaje, { esError: true });
+
+    } finally {
+        botonCompartir.innerHTML = textoOriginal;
+        botonCompartir.disabled = false;
+    }
+}
+
+/**
+ * Intenta entregar el PDF al selector del sistema.
+ *
+ * @return {Promise<boolean>} true si el fichero ya está en manos del sistema o
+ *         el usuario decidió cancelar; false si hay que seguir por el camino de
+ *         escritorio (descargar y abrir el canal)
+ */
+async function seHaCompartidoElFichero(fichero, texto) {
+    if (!navigator.canShare || !navigator.canShare({ files: [fichero] })) {
+        return false;
+    }
+
+    try {
+        await navigator.share({
+            files: [fichero],
+            title: "Factura " + facturaCompartible.factura.numeroFactura,
+            text: texto,
+        });
+        return true;
+
+    } catch (error) {
+        // El usuario ha cerrado el selector. No es un fallo y no hay que
+        // ofrecerle nada más: ya ha dicho que no.
+        if (error && error.name === "AbortError") {
+            return true;
+        }
+
+        // Cualquier otra cosa —el gesto caducado, un permiso denegado— NO es el
+        // final: queda el camino de escritorio, que funciona igual. Se registra
+        // para poder diagnosticarlo, pero el usuario no se entera de nada.
+        console.warn("El selector del sistema no se pudo abrir; se descarga el PDF", error);
+        return false;
+    }
+}
+
+botonCompartir.addEventListener("click", () => {
+    if (!facturaCompartible) {
+        return;
+    }
+    // El fallo no se trata aquí: lo recoge compartir(), que es quien sabe
+    // contárselo al usuario. El catch vacío solo evita que la promesa quede
+    // rechazada sin escuchar si al final no se comparte nada.
+    pdfPedido = pedirPdf();
+    pdfPedido.catch(() => {});
+});
+
+opcionWhatsapp.addEventListener("click", () => compartir("whatsapp"));
+opcionTelegram.addEventListener("click", () => compartir("telegram"));
+opcionCorreo.addEventListener("click", () => compartir("correo"));
+opcionDescargar.addEventListener("click", () => compartir("descargar"));
