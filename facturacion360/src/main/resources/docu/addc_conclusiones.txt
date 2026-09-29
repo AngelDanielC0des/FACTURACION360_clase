@@ -9,7 +9,7 @@
 7. He aprendido a distribuir una aplicación web de java en diferentes capas: controller, service, repository, dto, dao, y he entendido todos los conceptos. 
 8. He aprendido SQL ( podía haber puesto algo más como a hacer consultas oarametrizas y evitar la inyección SQL). 
 9. He aprendido JDBC ( aquí también debería haber puesto algo más, mucho mejor hubiese estado : he aprendido a pasar JDBC, la api de java para comunicarse usando SQL. Y también haber añadido JDBCtemplates de Spring boot que es lo que realmente hemos usado, lo cual simplifica el proceso y permite mapear las filas fácilmente con un rowMapper ), algo así, hubiera estado genial. 
-10. He aprendido lo que es un servlet
+10. He aprendido lo que es un servlet. ( Aquí también hubiera estado bien diferenciarlo de Controller, porque el controller actúa como servlet pero el de verdad es el DispatchServlet,el que en realidad despacha y llama a los controllers,aunque es invisible porque en este caso lo hace Spring. ) 
 11.He aprendido Spring boot 4.0 y el concepto de reflexión.
 12. He aprendido los tipos de controladores, un REST controller devuelve un conjunto de datos, normalmente en formato JSON.
 13. He aprendido a usar los métodos CRUD ( créate, read, update, delete).
