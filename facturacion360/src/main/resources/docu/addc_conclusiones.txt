@@ -7,8 +7,8 @@
 **fix esmejor usar bucles for o while con salida anticipada ( o streams) para deterner la iteracción en cuanto se encuentraa el dato, evitando así recibir una indexOutOfBoundsException al procesar listas vacias, no hacíendo falta una declaración para la comprobación de su existencia.
 6. Comunicación Cliente-Servidor-DB. He aprendido como se comunican mediante el controller del servidor que responder al cliente, pasando por el respository para encontrar en la db la respuesta que pide ( si es necesario, depende la petición)
 7. He aprendido a distribuir una aplicación web de java en diferentes capas: controller, service, repository, dto, dao, y he entendido todos los conceptos. 
-8. He aprendido SQL
-9. He aprendido JDBC
+8. He aprendido SQL ( podía haber puesto algo más como a hacer consultas oarametrizas y evitar la inyección SQL). 
+9. He aprendido JDBC ( aquí también debería haber puesto algo más, mucho mejor hubiese estado : he aprendido a pasar JDBC, la api de java para comunicarse usando SQL. Y también haber añadido JDBCtemplates de Spring boot que es lo que realmente hemos usado, lo cual simplifica el proceso y permite mapear las filas fácilmente con un rowMapper ), algo así, hubiera estado genial. 
 10. He aprendido lo que es un servlet
 11.He aprendido Spring boot 4.0 y el concepto de reflexión.
 12. He aprendido los tipos de controladores, un REST controller devuelve un conjunto de datos, normalmente en formato JSON.
