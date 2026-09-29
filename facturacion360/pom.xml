@@ -29,6 +29,7 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<maven.jar.forceCreation>true</maven.jar.forceCreation>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -132,6 +133,36 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration><argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine></configuration>
+			</plugin>
+			<!-- Ofuscar el JAR antes de que Spring Boot añada sus dependencias. -->
+			<plugin>
+				<groupId>com.github.wvengen</groupId>
+				<artifactId>proguard-maven-plugin</artifactId>
+				<version>2.6.1</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>proguard</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<proguardVersion>7.4.1</proguardVersion>
+					<injar>${project.build.finalName}.jar</injar>
+					<proguardInclude>${project.basedir}/proguard-rules.pro</proguardInclude>
+					<includeDependency>true</includeDependency>
+					<includeDependencyInjar>false</includeDependencyInjar>
+					<inLibsFilter>!META-INF/versions/**,!module-info.class</inLibsFilter>
+					<libs>
+						<lib>${java.home}/jmods</lib>
+					</libs>
+					<maxMemory>512m</maxMemory>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

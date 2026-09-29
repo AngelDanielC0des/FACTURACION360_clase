@@ -36,7 +36,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: facturacion360-preproduccion-${{ github.run_id }}
-          path: facturacion360/target/*.jar
+          path: facturacion360/target/facturacion360-0.0.1-SNAPSHOT.jar
           if-no-files-found: error
 
   deploy:
@@ -65,4 +65,4 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: facturacion360-test
-          package: '*.jar'
+          package: 'facturacion360-0.0.1-SNAPSHOT.jar'
