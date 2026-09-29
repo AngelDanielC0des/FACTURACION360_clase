@@ -1,0 +1,22 @@
+A lo largo de esta formación en Desarrollo de Aplicaciones Web impartida por Valeriano, he podido ampliar y mejorar mis conocimientos en:
+
+1 HTML
+2 CSS
+3 JavaScript 
+4 Entornos Servidor
+5 Desarrollo de Software como Mysql, Java, Spring Tool Suite
+6 Uso avanzado de GitHub
+7 Pruebas de Test y funcionamiento de Azure
+8 Diseñar la estructura del proyecto Facturacion 360 
+9 Trabajar junto a un equipo en el que discutir cada proceso del proyecto(mejoras, rediseños...)
+10 Uso de aplicaciones web (Visual Studio) para diseño de aplicacionesy páginas web
+11 Implemetar otras habilidades para ayudar en ciertos momentos a los compañeros
+12. Despliegue y publicación de aplicaciones, aprendiendo a subir y configurar el proyecto en servidores web reales.
+13. Diseño y normalización de bases de datos relacionales para asegurar la integridad y consistencia de los datos del proyecto.
+14. Arquitectura de software y patrones de diseño (como MVC), separando la lógica de negocio de la interfaz de usuario.
+15. Integración de sistemas y consumo de APIs / Servicios Web para conectar el backend con el frontend de forma eficiente.
+16. Metodologías ágiles y gestión del tiempo, organizando las tareas del proyecto y cumpliendo con los plazos de entrega.
+17. Optimización del código y buenas prácticas (Clean Code) para garantizar que el software sea escalable y fácil de mantener.
+18. Resolución de problemas complejos (Debugging), localizando y corrigiendo errores tanto en el entorno cliente como en el servidor.
+19. Seguridad en aplicaciones web, implementando controles de acceso y protegiendo el proyecto frente a vulnerabilidades básicas.
+20. Adaptabilidad tecnológica y autoaprendizaje, desarrollando la capacidad de asimilar nuevas herramientas y frameworks del sector.
