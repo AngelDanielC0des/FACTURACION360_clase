@@ -1,0 +1,20 @@
+1. Java y Objetos. he aprendido java y he visto como es la programación orientada a objetos, donde todo tiene una clase y esta muy organizado, muchas de estas clases ya tienen métodos creados en las librerías de java y podemos utilizarlos. Al ser un lenguaje con un amplio bagaje, tiene muchos métodos y cosas ya creadas. y importar solo las que necesitamos con "import".
+2. Encapsulamiento, alcance de las variables declaradas : private, protected, public.
+3. Polimorfismo ( un vehículo, puede ser también un coche).
+4. Fuerte tipado, java es un lenguaje fuertemente tipado que requiere que se pongan los tipos de datos y no sea un caos como JavaScript.
+5. Para una búsqueda se usa do while en vez de for.
+6. Comunicación Cliente-Servidor-DB. He aprendido como se comunican mediante el controller del servidor que responder al cliente, pasando por el respository para encontrar en la db la respuesta que pide ( si es necesario, depende la petición)
+7. He aprendido a distribuir una aplicación web de java en diferentes capas: controller, service, repository, dto, dao, y he entendido todos los conceptos. 
+8. He aprendido SQL
+9. He aprendido JDBC
+10. He aprendido lo que es un servlet
+11.He aprendido Spring boot 4.0 y el concepto de reflexión.
+12. He aprendido los tipos de controladores, un REST controller devuelve un conjunto de datos, normalmente en formato JSON.
+13. He aprendido a usar los métodos CRUD ( créate, read, update, delete).
+14. He aprendido a manejar tipos de datos como el BIGDECIMAL para trabajar con y no tener problemas al redondear decimales con números grandes, esto se suele utilizar mucho con dinero para que no se descuadren las cuentas.
+15. He aprendido a realizar un huella criptográfica mediante encriptación de una cadena de bytes (que contiene un String de campos clave&&valor), y codificarla en SHA-256 con el método digest, junto a la huella anterior para seguir una secuencial inmutable. 
+16. He aprendido a usar logs mediante el metodo logger de la librería S4LG como se llame de java. 
+17. He aprendido a usar el swagger-ui para probar los endpoints de una aplicación.
+18. He aprendido a usar Postman, a ponerle los query params y diferenciar las partes de una respuesta ResponseEntity=cabecera,contenido,código de estado.
+19. He aprendido como es el ciclo de vida de Maven, el proceso de compilación,test,empaquetado,verificación y despliegue y las fases por las que pasa un archivo de java. java -> .class -> .jar
+20. He aprendido para que sirve minificar y ofuscar el código en producción. Aumentando el rendimiento y la privacidad. 
