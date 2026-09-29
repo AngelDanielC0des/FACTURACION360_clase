@@ -1,0 +1,5 @@
+ifica la creación y ejecución de aplicaciones web Java.
+15. Arquitectura por capas: separa controlador, servicio y repositorio.
+16. Validación y gestión de errores: protegen la aplicación frente a datos incorrectos.
+17. JDBC y JdbcTemplate: permiten acceder a una base de datos desde Java.
+18. Bases de datos relacionales: organizan la información mediante tablas relacionadas.
