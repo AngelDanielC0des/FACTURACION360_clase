@@ -1,8 +1,10 @@
 1. Java y Objetos. he aprendido java y he visto como es la programación orientada a objetos, donde todo tiene una clase y esta muy organizado, muchas de estas clases ya tienen métodos creados en las librerías de java y podemos utilizarlos. Al ser un lenguaje con un amplio bagaje, tiene muchos métodos y cosas ya creadas. y importar solo las que necesitamos con "import".
 2. Encapsulamiento, alcance de las variables declaradas : private, protected, public.
+**fix los modificadores se aplican a las variables declaradas en la clase, sean de instancia (el estado de cada objeto) o de clase (static, una sola compartida por todos): private int saldo. Una variable local, dentro de un método, no admite ninguno; su alcance es siempre el bloque donde se declara. Y hay un cuarto nivel que no se escribe: int saldo a secas queda package-private, visible solo desde las clases del mismo paquete.
 3. Polimorfismo ( un vehículo, puede ser también un coche).
 4. Fuerte tipado, java es un lenguaje fuertemente tipado que requiere que se pongan los tipos de datos y no sea un caos como JavaScript.
 5. Para una búsqueda se usa do while en vez de for.
+**fix esmejor usar bucles for o while con salida anticipada ( o streams) para deterner la iteracción en cuanto se encuentraa el dato, evitando así recibir una indexOutOfBoundsException al procesar listas vacias, no hacíendo falta una declaración para la comprobación de su existencia.
 6. Comunicación Cliente-Servidor-DB. He aprendido como se comunican mediante el controller del servidor que responder al cliente, pasando por el respository para encontrar en la db la respuesta que pide ( si es necesario, depende la petición)
 7. He aprendido a distribuir una aplicación web de java en diferentes capas: controller, service, repository, dto, dao, y he entendido todos los conceptos. 
 8. He aprendido SQL
